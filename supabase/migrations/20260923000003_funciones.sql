@@ -10,8 +10,16 @@ language plpgsql set search_path = public as $$
 declare
   v_email text := nullif(lower(trim(p ->> 'email')), '');
   v_ext text := nullif(p ->> 'id_externo', '');
+  v_tel text := nullif(trim(p ->> 'telefono'), '');
   v_id uuid;
 begin
+  if jsonb_typeof(p) <> 'object' then
+    raise exception 'fila_invalida';
+  end if;
+  if v_email is null and v_tel is null and v_ext is null then
+    raise exception 'fila_sin_contacto';
+  end if;
+
   select id into v_id from leads
   where fuente_id = p_fuente and duplicado_de is null
     and ((v_email is not null and lower(email) = v_email)
@@ -22,7 +30,7 @@ begin
     update leads set
       nombres = coalesce(nullif(p ->> 'nombres', ''), nombres),
       apellido = coalesce(nullif(p ->> 'apellido', ''), apellido),
-      telefono = coalesce(nullif(p ->> 'telefono', ''), telefono),
+      telefono = coalesce(v_tel, telefono),
       empresa = coalesce(nullif(p ->> 'empresa', ''), empresa),
       ruc = coalesce(nullif(p ->> 'ruc', ''), ruc),
       cargo = coalesce(nullif(p ->> 'cargo', ''), cargo),
@@ -37,7 +45,7 @@ begin
   insert into leads (fuente_id, nombres, apellido, email, telefono, empresa, ruc, cargo, rubro,
                      fecha_nacimiento, extra, id_externo, origen, user_agent)
   values (p_fuente, nullif(p ->> 'nombres', ''), nullif(p ->> 'apellido', ''), v_email,
-          nullif(p ->> 'telefono', ''), nullif(p ->> 'empresa', ''), nullif(p ->> 'ruc', ''),
+          v_tel, nullif(p ->> 'empresa', ''), nullif(p ->> 'ruc', ''),
           nullif(p ->> 'cargo', ''), nullif(p ->> 'rubro', ''),
           nullif(p ->> 'fecha_nacimiento', '')::date, coalesce(p -> 'extra', '{}'::jsonb), v_ext,
           coalesce(nullif(p ->> 'origen', ''), 'dashboard'), nullif(p ->> 'user_agent', ''));
