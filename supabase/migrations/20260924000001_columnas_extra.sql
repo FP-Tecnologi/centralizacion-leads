@@ -193,12 +193,23 @@ grant execute on function public.registrar_columnas(jsonb) to authenticated;
 
 -- ::date/::numeric pueden tirar (fecha de calendario inválida tipo 2024-02-30; texto con
 -- dígitos Unicode no-ASCII que no castea) y una excepción sin capturar tumbaría la lectura
--- de TODA la vista por una sola fila mala. Atrapar acá, devolver null, es más simple y más
--- robusto que un regex de guarda (que además tendría que evitar \d "ancho" de ICU).
+-- de TODA la vista por una sola fila mala.
+--
+-- Fix round 2: el solo try/cast/catch NO bastaba — con el DateStyle por defecto
+-- (ISO, MDY) Postgres acepta gustoso formatos no-ISO y los reinterpreta: '01/02/2024'
+-- castea a 2024-01-02 (día y mes invertidos, sin avisar) y hasta 'today'/'now' castean a
+-- una fecha real. Por eso `_fecha_segura` exige el patrón ISO estricto (dígitos ASCII
+-- `[0-9]`, no `\d` — que en Postgres matchea dígitos Unicode "anchos" que después no
+-- castean) ANTES de intentar el cast; solo entonces el cast + catch cubre lo demás (fecha
+-- de calendario inválida tipo 2024-02-30). Mismo problema y mismo fix para
+-- `_numero_seguro`: sin el patrón, '1e3' o 'NaN' castean a valores reales en vez de null.
 create or replace function public._fecha_segura(v text) returns date
 language plpgsql immutable as $$
 begin
-  return nullif(v, '')::date;
+  if v is null or v !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' then
+    return null;
+  end if;
+  return v::date;
 exception when others then
   return null;
 end $$;
@@ -206,7 +217,10 @@ end $$;
 create or replace function public._numero_seguro(v text) returns numeric
 language plpgsql immutable as $$
 begin
-  return nullif(v, '')::numeric;
+  if v is null or v !~ '^-?[0-9]+(\.[0-9]+)?$' then
+    return null;
+  end if;
+  return v::numeric;
 exception when others then
   return null;
 end $$;

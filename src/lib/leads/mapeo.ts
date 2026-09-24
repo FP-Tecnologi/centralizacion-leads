@@ -1,4 +1,4 @@
-import { esNucleo, separarLead, validarLead, type CampoFormulario, type ErrorCampo, type LeadEntrada } from '../../../supabase/functions/_shared/lead';
+import { esClaveReservada, esNucleo, separarLead, validarLead, type CampoFormulario, type ErrorCampo, type LeadEntrada } from '../../../supabase/functions/_shared/lead';
 
 export type Mapeo = Record<string, string | null>;
 
@@ -62,6 +62,45 @@ function claveExtraLibre(base: string, datos: Record<string, unknown>): string {
     n += 1;
   }
   return candidata;
+}
+
+// 63 = límite real de un identificador de Postgres (mismo tope que el check de
+// columnas_extra.key en la migración SQL). Un encabezado de archivo largo (o que
+// normaliza a un nombre reservado, o que choca con una columna ya ocupada) no puede
+// mandarse tal cual a registrar_columnas: el check lo rechazaría (23514) y frenaría
+// toda la importación con un error genérico. Se trunca y, si hace falta, se sufija
+// _2/_3/… — reservando espacio del sufijo dentro del límite de 63.
+const MAX_CLAVE = 63;
+
+export function claveDestinoSegura(base: string, ocupadas: Iterable<string>): string {
+  const ocupadasSet = ocupadas instanceof Set ? ocupadas : new Set(ocupadas);
+  const libre = (c: string) => c !== '' && !esClaveReservada(c) && !ocupadasSet.has(c);
+  const raiz = base.slice(0, MAX_CLAVE);
+  if (libre(raiz)) return raiz;
+  let n = 2;
+  let candidata: string;
+  do {
+    const sufijo = `_${n}`;
+    candidata = base.slice(0, Math.max(0, MAX_CLAVE - sufijo.length)) + sufijo;
+    n += 1;
+  } while (!libre(candidata));
+  return candidata;
+}
+
+// Para una clave "sobrante" generada por claveExtraLibre (dos columnas del archivo
+// mapeadas al mismo destino: la segunda cae en una clave aparte) reconstruye un label
+// legible buscando, entre los encabezados del propio mapeo, cuál normaliza a esa clave
+// (o a su base, si claveExtraLibre le agregó un sufijo _2/_3/…) — si no encuentra
+// ninguno, usa la clave tal cual.
+export function labelParaClaveSobrante(key: string, mapeo: Mapeo): string {
+  for (const h of Object.keys(mapeo)) {
+    if (normalizarEncabezado(h) === key) return h;
+  }
+  const base = key.replace(/_\d+$/, '');
+  for (const h of Object.keys(mapeo)) {
+    if (normalizarEncabezado(h) === base) return h;
+  }
+  return key;
 }
 
 const ISO_FECHA = /^\d{4}-\d{2}-\d{2}$/;

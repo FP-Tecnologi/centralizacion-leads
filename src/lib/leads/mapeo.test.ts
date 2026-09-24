@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { construirFilas, inferirTipo, normalizarEncabezado, sugerirMapeo } from './mapeo';
+import { claveDestinoSegura, construirFilas, inferirTipo, labelParaClaveSobrante, normalizarEncabezado, sugerirMapeo } from './mapeo';
 import type { CampoFormulario } from '../../../supabase/functions/_shared/lead';
 
 const campos: CampoFormulario[] = [{ key: 'ciudad', label: 'Ciudad', tipo: 'texto', requerido: false }];
@@ -143,5 +143,51 @@ describe('inferirTipo', () => {
 
   it('todo vacio cae a texto', () => {
     expect(inferirTipo(['', '  '])).toBe('texto');
+  });
+});
+
+describe('claveDestinoSegura', () => {
+  it('deja pasar una clave corta y libre tal cual', () => {
+    expect(claveDestinoSegura('presupuesto', [])).toBe('presupuesto');
+  });
+
+  it('trunca a 63 caracteres una clave larga', () => {
+    const larga = 'a'.repeat(120);
+    const clave = claveDestinoSegura(larga, []);
+    expect(clave.length).toBeLessThanOrEqual(63);
+    expect(clave).toBe('a'.repeat(63));
+  });
+
+  it('sufija cuando la clave ya está ocupada, y el resultado sigue <= 63', () => {
+    expect(claveDestinoSegura('ciudad', ['ciudad'])).toBe('ciudad_2');
+    expect(claveDestinoSegura('ciudad', ['ciudad', 'ciudad_2'])).toBe('ciudad_3');
+  });
+
+  it('sufija una clave larga que trunca a algo ya ocupado, y el resultado sigue <= 63', () => {
+    const larga = 'a'.repeat(120);
+    const truncada = 'a'.repeat(63);
+    const clave = claveDestinoSegura(larga, [truncada]);
+    expect(clave.length).toBeLessThanOrEqual(63);
+    expect(clave).not.toBe(truncada);
+  });
+
+  it('sufija una clave reservada (columna real de leads o de la vista)', () => {
+    expect(claveDestinoSegura('fuente_slug', [])).toBe('fuente_slug_2');
+    expect(claveDestinoSegura('status', [])).toBe('status_2');
+    expect(claveDestinoSegura('created_at', [])).toBe('created_at_2');
+  });
+});
+
+describe('labelParaClaveSobrante', () => {
+  it('encuentra el encabezado original cuya clave normalizada coincide', () => {
+    expect(labelParaClaveSobrante('telefono_2', { Celular: 'telefono', 'Teléfono': 'telefono_2' })).toBe('Teléfono');
+  });
+
+  it('si la clave trae sufijo pero el encabezado normaliza a la base, tambien la encuentra', () => {
+    expect(labelParaClaveSobrante('telefono_2', { Celular: 'telefono', Telefono: 'telefono' })).toBe('Telefono');
+  });
+
+  it('sin match, devuelve la clave tal cual', () => {
+    expect(labelParaClaveSobrante('algo_2', { Celular: 'telefono' })).toBe('algo_2');
   });
 });

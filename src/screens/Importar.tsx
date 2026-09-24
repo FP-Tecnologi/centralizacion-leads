@@ -12,7 +12,7 @@ import { PageHead } from '../components/shell/PageHead';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { guardarFuente, listarColumnasExtra, listarFuentes, registrarColumnas, type ColumnaExtra, type Fuente } from '../lib/leads/datos';
-import { construirFilas, inferirTipo, normalizarEncabezado, slugify, sugerirMapeo, type FilaEntrada, type Mapeo } from '../lib/leads/mapeo';
+import { claveDestinoSegura, construirFilas, inferirTipo, labelParaClaveSobrante, normalizarEncabezado, slugify, sugerirMapeo, type FilaEntrada, type Mapeo } from '../lib/leads/mapeo';
 import { exportarObjetos, leerArchivo } from '../lib/leads/exportar';
 import { NUCLEO, type ErrorCampo } from '../../supabase/functions/_shared/lead';
 
@@ -140,8 +140,16 @@ export function Importar() {
       vistos.add(c.key);
       out.push({ value: c.key, label: c.label });
     }
-    const nueva = normalizarEncabezado(encabezado);
-    if (nueva && !vistos.has(nueva)) out.push({ value: nueva, label: `Campo nuevo: ${encabezado}` });
+    // el valor de la opción "Campo nuevo" es la clave que de verdad se va a registrar: no
+    // el `normalizarEncabezado` crudo (puede pasar de 63 caracteres, chocar con otra clave
+    // ya en `vistos`, o normalizar justo a un nombre reservado como "status"/"fuente_slug")
+    // sino la que sale de claveDestinoSegura, que trunca/sufija para que registrar_columnas
+    // nunca la rechace (23514).
+    const base = normalizarEncabezado(encabezado);
+    if (base) {
+      const nueva = claveDestinoSegura(base, vistos);
+      out.push({ value: nueva, label: `Campo nuevo: ${encabezado}` });
+    }
     return out;
   };
 
@@ -161,28 +169,62 @@ export function Importar() {
         primerEncabezadoPorDestino.set(destino, h);
       }
     }
-    const cols: ColumnaExtra[] = [...primerEncabezadoPorDestino.entries()].map(([key, encabezado]) => ({
+    const colsPrimarias: ColumnaExtra[] = [...primerEncabezadoPorDestino.entries()].map(([key, encabezado]) => ({
       key,
       label: encabezado,
       tipo: inferirTipo(filasArchivo.map((f) => String(f.datos[encabezado] ?? ''))),
     }));
+
+    // construirFilas puede generar sus propias claves "sobrantes" (claveExtraLibre) cuando
+    // dos columnas del archivo mapean al mismo destino — solo se conocen corriendo
+    // construirFilas una primera vez. También se registran (el auto-registro de
+    // upsert_lead ahora solo mira claves que la fuente ya declara, así que si no se
+    // registran acá jamás se vuelven columna real).
+    const tiposPrimarios = Object.fromEntries(colsPrimarias.map((c) => [c.key, c.tipo]));
+    const primeraPasada = construirFilas(filasArchivo, mapeo, fuente.campos, tiposPrimarios);
+    const clavesPrimarias = new Set(colsPrimarias.map((c) => c.key));
+    const clavesSobrantes = new Set<string>();
+    for (const { lead } of primeraPasada.validas) {
+      for (const k of Object.keys(lead.extra)) {
+        if (!clavesPrimarias.has(k)) clavesSobrantes.add(k);
+      }
+    }
+    const colsSobrantes: ColumnaExtra[] = [...clavesSobrantes].map((key) => ({
+      key,
+      label: labelParaClaveSobrante(key, mapeo),
+      tipo: inferirTipo(
+        primeraPasada.validas.map(({ lead }) => lead.extra[key]).filter((v): v is string => typeof v === 'string'),
+      ),
+    }));
+
+    const cols = [...colsPrimarias, ...colsSobrantes];
     if (cols.length) {
       setGuardandoMapeo(true);
-      try {
-        await registrarColumnas(cols);
-        setColumnasExtra((prev) => {
-          const previas = new Set(prev.map((c) => c.key));
-          return [...prev, ...cols.filter((c) => !previas.has(c.key))].sort((a, b) => a.label.localeCompare(b.label));
-        });
-      } catch {
-        setErrorMapeo('No se pudieron registrar las columnas. Intenta de nuevo.');
-        setGuardandoMapeo(false);
+      // una por una (no un solo lote): así, si una falla (p.ej. tope de 200 columnas
+      // alcanzado), se sabe exactamente cuál y por qué, y las demás igual quedan
+      // registradas — en vez de un error genérico que frena todo el mapeo.
+      const fallidas: string[] = [];
+      for (const col of cols) {
+        try {
+          await registrarColumnas([col]);
+        } catch (e) {
+          fallidas.push(`"${col.label}" (${col.key}): ${e instanceof Error ? e.message : 'error desconocido'}`);
+        }
+      }
+      setColumnasExtra((prev) => {
+        const previas = new Set(prev.map((c) => c.key));
+        return [...prev, ...cols.filter((c) => !previas.has(c.key))].sort((a, b) => a.label.localeCompare(b.label));
+      });
+      setGuardandoMapeo(false);
+      if (fallidas.length) {
+        setErrorMapeo(`No se pudieron registrar estas columnas: ${fallidas.join('; ')}`);
         return;
       }
-      setGuardandoMapeo(false);
     }
     // fechas extra en DD/MM/YYYY -> ISO antes de enviar: leads_completo (SQL) solo castea
-    // ISO, y un DD/MM/YYYY guardado tal cual saldría null ahí para siempre.
+    // ISO, y un DD/MM/YYYY guardado tal cual saldría null ahí para siempre. Se corre
+    // construirFilas de nuevo (ahora con los tipos de las claves sobrantes también) en vez
+    // de reusar `primeraPasada`, que no las normalizó.
     const tiposExtra = Object.fromEntries(cols.map((c) => [c.key, c.tipo]));
     setConstruido(construirFilas(filasArchivo, mapeo, fuente.campos, tiposExtra));
     setResultado(null);

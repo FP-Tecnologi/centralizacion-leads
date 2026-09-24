@@ -1,5 +1,13 @@
 begin;
-select plan(17);
+select plan(20);
+
+-- fix round 2: _fecha_segura/_numero_seguro exigen el patrón ISO/ASCII estricto antes de
+-- castear — no solo capturan la excepción. Sin el patrón, Postgres (DateStyle ISO,MDY por
+-- defecto) castea DD/MM/YYYY invirtiendo día y mes en vez de fallar, y acepta palabras
+-- especiales como 'today'; '_numero_seguro' aceptaría notación científica.
+select is(public._fecha_segura('01/02/2024'), null, '_fecha_segura rechaza no-ISO (evita el swap DD/MM con DateStyle MDY)');
+select is(public._fecha_segura('today'), null, '_fecha_segura rechaza palabras especiales de Postgres (today/now)');
+select is(public._numero_seguro('NaN'), null, '_numero_seguro rechaza NaN');
 
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-00000000000a', 'admin@t.com'),

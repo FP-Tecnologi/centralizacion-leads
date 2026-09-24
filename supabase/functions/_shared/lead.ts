@@ -15,6 +15,22 @@ export function esNucleo(k: string): k is CampoNucleo {
   return (NUCLEO as readonly string[]).includes(k);
 }
 
+// Debe reflejar public._claves_reservadas() en
+// supabase/migrations/20260924000001_columnas_extra.sql: núcleo + columnas reales de
+// `leads` + las dos que la vista leads_completo siempre agrega (join con fuentes). Una
+// clave extra generada en el cliente (p.ej. el wizard de importación armando "Campo
+// nuevo: <encabezado>") nunca debe caer en ninguna de estas — el check de la tabla las
+// rechaza con 23514.
+export const CLAVES_RESERVADAS = [
+  ...NUCLEO,
+  'status', 'extra', 'id', 'fuente_id', 'created_at', 'actualizado_en', 'duplicado_de',
+  'id_externo', 'origen', 'user_agent', 'evento', 'fuente_slug', 'fuente_nombre',
+] as const;
+
+export function esClaveReservada(k: string): boolean {
+  return (CLAVES_RESERVADAS as readonly string[]).includes(k);
+}
+
 const DMY = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/;
 
 function normalizar(key: string, v: string): string {
