@@ -2,19 +2,44 @@
 -- landing / app offline y no son núcleo dejan de sentirse "extra": se registran solas
 -- y se exponen como columnas reales de una vista tipada, SIN alterar `leads` (los datos
 -- siguen viviendo en `leads.extra` jsonb).
+--
+-- Fix round 1 (revisión previa a llegar a la nube, esta migración todavía no se pushea):
+--  - la vista solo se reconstruye cuando de verdad se insertaron claves nuevas (antes,
+--    el trigger corría en cada upsert_lead aunque 0 filas nuevas entraran a columnas_extra);
+--  - un fallo al reconstruir la vista nunca debe tumbar un upsert_lead (intake primero);
+--  - el auto-registro desde upsert_lead solo registra claves que la fuente ya declara en
+--    `campos` (un lead público no puede hacer crecer el registro con claves arbitrarias) y
+--    respeta un tope de 200 columnas; registrar_columnas (uso admin/editor explícito, p.ej.
+--    el wizard de importación) sigue libre pero también respeta el tope, con error claro;
+--  - los casts de la vista nunca deben poder tirar toda la lectura (fecha de calendario
+--    inválida, dígitos Unicode que matchean \d pero no castean): dos funciones seguras
+--    (_fecha_segura/_numero_seguro) que capturan la excepción y devuelven null;
+--  - refrescar_leads_completo/_registrar_claves_extra dejan de estar expuestas a
+--    authenticated (solo las llaman internamente triggers/funciones ya privilegiadas).
+
+create or replace function public._claves_reservadas() returns text[]
+language sql immutable as $$
+  select array[
+    'nombres', 'apellido', 'email', 'telefono', 'empresa', 'ruc', 'cargo', 'rubro',
+    'fecha_nacimiento', 'status', 'extra', 'id', 'fuente_id', 'created_at', 'actualizado_en',
+    'duplicado_de', 'id_externo', 'origen', 'user_agent', 'evento',
+    -- columnas que la vista siempre agrega ella misma (join con fuentes): tampoco pueden
+    -- ser el nombre de una columna extra generada, o `format(%I)` produciría un choque.
+    'fuente_slug', 'fuente_nombre'
+  ]
+$$;
 
 create table public.columnas_extra (
-  key text primary key check (key ~ '^[a-z0-9_]+$'),
+  -- 63 = NAMEDATALEN-1, el máximo real de un identificador de Postgres: una clave más
+  -- larga se vería truncada por `format('%I', key)` al nombrar la columna de la vista,
+  -- pudiendo colisionar con otra columna truncada al mismo nombre.
+  key text primary key check (key ~ '^[a-z0-9_]{1,63}$'),
   label text not null,
   tipo text not null default 'texto' check (tipo in ('texto', 'fecha', 'numero')),
   creado_en timestamptz not null default now(),
-  -- ni núcleo de `leads` ni columna real de la tabla: esas van directo a su propia
-  -- columna, no a `extra`, y no pueden convivir con una columna generada del mismo nombre.
-  constraint columnas_extra_no_nucleo check (key <> all (array[
-    'nombres', 'apellido', 'email', 'telefono', 'empresa', 'ruc', 'cargo', 'rubro',
-    'fecha_nacimiento', 'status', 'extra', 'id', 'fuente_id', 'created_at', 'actualizado_en',
-    'duplicado_de', 'id_externo', 'origen', 'user_agent', 'evento'
-  ]))
+  -- ni núcleo de `leads` ni columna real/generada de la vista: esas van directo a su
+  -- propia columna, no a `extra`, y no pueden convivir con una columna generada homónima.
+  constraint columnas_extra_no_nucleo check (key <> all (public._claves_reservadas()))
 );
 
 alter table public.columnas_extra enable row level security;
@@ -37,26 +62,41 @@ grant select, insert, update, delete on public.columnas_extra to authenticated;
 
 -- ================= auto-registro =================
 
--- Inserta las claves válidas de un `extra` jsonb en el registro global; las inválidas
--- (no matchean la regex, o son núcleo/columna real) se ignoran en silencio — nunca error.
-create or replace function public._registrar_claves_extra(p_extra jsonb) returns void
-language sql set search_path = public as $$
+-- ponytail: tope "blando" — el `where` de más abajo evalúa el conteo una sola vez por
+-- sentencia (subconsulta no correlacionada), así que una sola llamada con muchas claves
+-- en un mismo `extra` puede pasarse del tope antes de que la siguiente llamada lo vea
+-- lleno. Un lead trae unas pocas claves; si algún día se necesita un tope exacto,
+-- reservar filas con un advisory lock o un contador aparte.
+--
+-- Solo registra claves de `extra` que la fuente (p_fuente) ya declara en su propio
+-- `campos`: un envío público (ingresar-lead) no puede hacer crecer el registro global con
+-- claves arbitrarias — eso es lo que separa este auto-registro silencioso del RPC
+-- registrar_columnas (admin/editor, deliberado). Claves inválidas o no declaradas se
+-- ignoran en silencio — nunca error: nunca debe poder bloquear un upsert_lead.
+create or replace function public._registrar_claves_extra(p_fuente uuid, p_extra jsonb) returns void
+language plpgsql set search_path = public as $$
+declare
+  v_declaradas text[];
+begin
+  select coalesce(array_agg(c ->> 'key'), '{}') into v_declaradas
+  from public.fuentes f, lateral jsonb_array_elements(coalesce(f.campos, '[]'::jsonb)) c
+  where f.id = p_fuente;
+
   insert into public.columnas_extra (key, label)
   select k, k from jsonb_object_keys(coalesce(p_extra, '{}'::jsonb)) k
-  where k ~ '^[a-z0-9_]+$' and k <> all (array[
-    'nombres', 'apellido', 'email', 'telefono', 'empresa', 'ruc', 'cargo', 'rubro',
-    'fecha_nacimiento', 'status', 'extra', 'id', 'fuente_id', 'created_at', 'actualizado_en',
-    'duplicado_de', 'id_externo', 'origen', 'user_agent', 'evento'
-  ])
-  on conflict (key) do nothing
-$$;
+  where k = any (v_declaradas)
+    and k ~ '^[a-z0-9_]{1,63}$'
+    and k <> all (public._claves_reservadas())
+    and (select count(*) from public.columnas_extra) < 200
+  on conflict (key) do nothing;
+end $$;
 
-revoke execute on function public._registrar_claves_extra(jsonb) from public, anon;
-grant execute on function public._registrar_claves_extra(jsonb) to authenticated;
+revoke execute on function public._registrar_claves_extra(uuid, jsonb) from public, anon, authenticated;
 
 -- create or replace de upsert_lead (20260923000003_funciones.sql): mismo cuerpo/guards,
 -- solo se cambia el `return` inmediato de cada rama por una variable `v_res`, para poder
--- registrar las claves extra una sola vez (cubre ingresar-lead, importar_leads y futuro sync).
+-- registrar las claves extra una sola vez (cubre ingresar-lead, importar_leads y futuro
+-- sync) — ahora pasando p_fuente, para que el registro respete lo que esa fuente declara.
 create or replace function public.upsert_lead(p_fuente uuid, p jsonb) returns text
 language plpgsql set search_path = public as $$
 declare
@@ -104,7 +144,7 @@ begin
     v_res := 'nueva';
   end if;
 
-  perform public._registrar_claves_extra(p -> 'extra');
+  perform public._registrar_claves_extra(p_fuente, p -> 'extra');
   return v_res;
 end $$;
 
@@ -115,16 +155,24 @@ revoke execute on function public.upsert_lead(uuid, jsonb) from public, anon, au
 -- p = [{key,label,tipo}]. Inserta las nuevas; en las existentes solo mejora el label
 -- cuando el guardado sigue siendo igual a la clave (nunca pisa un label puesto a mano
 -- por un admin/editor), y solo mejora el tipo cuando el guardado sigue en 'texto' y el
--- nuevo es más específico ('fecha'/'numero'). Clave inválida (núcleo o formato) → error
--- (a diferencia del auto-registro, esto es una acción deliberada de un admin/editor).
+-- nuevo es más específico ('fecha'/'numero'). Clave inválida (núcleo/reservada o formato,
+-- vía el check de la tabla) → error 23514 — a diferencia del auto-registro, esto es una
+-- acción deliberada de un admin/editor. Mismo tope de 200 que el auto-registro, pero acá
+-- se avisa con un error claro en vez de callar filas.
 create or replace function public.registrar_columnas(p jsonb) returns void
 language plpgsql security definer set search_path = public, pg_temp as $$
-declare v_item jsonb;
+declare
+  v_item jsonb;
+  v_total int;
 begin
   if not (public.mfa_ok() and public.mi_rol() in ('admin', 'editor')) then
     raise exception 'sin_permiso' using errcode = '42501';
   end if;
+  select count(*) into v_total from public.columnas_extra;
   for v_item in select * from jsonb_array_elements(p) loop
+    if v_total >= 200 and not exists (select 1 from public.columnas_extra where key = v_item ->> 'key') then
+      raise exception 'limite_columnas_extra' using errcode = '54000';
+    end if;
     insert into public.columnas_extra (key, label, tipo)
     values (
       v_item ->> 'key',
@@ -134,18 +182,41 @@ begin
     on conflict (key) do update set
       label = case when columnas_extra.label = columnas_extra.key then excluded.label else columnas_extra.label end,
       tipo = case when columnas_extra.tipo = 'texto' and excluded.tipo <> 'texto' then excluded.tipo else columnas_extra.tipo end;
+    select count(*) into v_total from public.columnas_extra;
   end loop;
 end $$;
 
 revoke execute on function public.registrar_columnas(jsonb) from public, anon;
 grant execute on function public.registrar_columnas(jsonb) to authenticated;
 
+-- ================= casts seguros para la vista =================
+
+-- ::date/::numeric pueden tirar (fecha de calendario inválida tipo 2024-02-30; texto con
+-- dígitos Unicode no-ASCII que no castea) y una excepción sin capturar tumbaría la lectura
+-- de TODA la vista por una sola fila mala. Atrapar acá, devolver null, es más simple y más
+-- robusto que un regex de guarda (que además tendría que evitar \d "ancho" de ICU).
+create or replace function public._fecha_segura(v text) returns date
+language plpgsql immutable as $$
+begin
+  return nullif(v, '')::date;
+exception when others then
+  return null;
+end $$;
+
+create or replace function public._numero_seguro(v text) returns numeric
+language plpgsql immutable as $$
+begin
+  return nullif(v, '')::numeric;
+exception when others then
+  return null;
+end $$;
+
 -- ================= vista tipada =================
 
 -- Reconstruye `leads_completo`: `leads` + fuente + una columna real por cada fila de
--- columnas_extra, tipada según `tipo` (valor no matchea el patrón esperado → null, no
--- error). Las claves ya están validadas por el check de la tabla; se cita igual con
--- %I/%L por higiene. security_invoker: hereda RLS de `leads`/`fuentes` del que consulta.
+-- columnas_extra, tipada según `tipo` vía los casts seguros de arriba. Las claves ya
+-- están validadas por el check de la tabla; se cita igual con %I/%L por higiene.
+-- security_invoker: hereda RLS de `leads`/`fuentes` del que consulta.
 create or replace function public.refrescar_leads_completo() returns void
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare
@@ -155,12 +226,8 @@ declare
 begin
   for v_col in select key, tipo from public.columnas_extra order by key loop
     v_extra := v_extra || case v_col.tipo
-      when 'fecha' then format(
-        E',\n  case when l.extra ->> %L ~ %L then (l.extra ->> %L)::date else null end as %I',
-        v_col.key, '^\d{4}-\d{2}-\d{2}$', v_col.key, v_col.key)
-      when 'numero' then format(
-        E',\n  case when l.extra ->> %L ~ %L then (l.extra ->> %L)::numeric else null end as %I',
-        v_col.key, '^-?\d+(\.\d+)?$', v_col.key, v_col.key)
+      when 'fecha' then format(E',\n  public._fecha_segura(l.extra ->> %L) as %I', v_col.key, v_col.key)
+      when 'numero' then format(E',\n  public._numero_seguro(l.extra ->> %L) as %I', v_col.key, v_col.key)
       else format(E',\n  l.extra ->> %L as %I', v_col.key, v_col.key)
     end;
   end loop;
@@ -180,18 +247,52 @@ begin
   notify pgrst, 'reload schema';
 end $$;
 
-revoke execute on function public.refrescar_leads_completo() from public, anon;
-grant execute on function public.refrescar_leads_completo() to authenticated;
+-- Solo la llaman, internamente, los triggers de más abajo (ellos sí son security definer
+-- y corren con el dueño de la función) — nunca directo desde la API.
+revoke execute on function public.refrescar_leads_completo() from public, anon, authenticated;
 
-create or replace function public._trg_refrescar_leads_completo() returns trigger
-language plpgsql as $$
+-- INSERT: solo reconstruye si de verdad entraron filas nuevas a columnas_extra (la tabla
+-- de transición `n` de un statement trigger solo trae las filas realmente insertadas — un
+-- `on conflict do nothing` que no insertó nada deja `n` vacía). Sin este chequeo, cada
+-- upsert_lead (aunque sus claves ya estuvieran todas registradas) dispararía un
+-- drop/create de la vista — DDL + lock exclusivo en cada lead que entra.
+create or replace function public._trg_refrescar_leads_completo_ins() returns trigger
+language plpgsql security definer set search_path = public, pg_temp as $$
 begin
-  perform public.refrescar_leads_completo();
+  if not exists (select 1 from n) then
+    return null;
+  end if;
+  begin
+    perform public.refrescar_leads_completo();
+  exception when others then
+    -- un fallo reconstruyendo la vista nunca debe tumbar el INSERT en columnas_extra ni,
+    -- por transitividad, el upsert_lead que lo disparó: se registra como warning y sigue.
+    raise warning 'refrescar_leads_completo (insert) fallo: %', sqlerrm;
+  end;
   return null;
 end $$;
 
-create trigger trg_columnas_extra_refrescar
-  after insert or update or delete on public.columnas_extra
+create trigger trg_columnas_extra_refrescar_ins
+  after insert on public.columnas_extra
+  referencing new table as n
+  for each statement execute function public._trg_refrescar_leads_completo_ins();
+
+-- UPDATE/DELETE de columnas_extra son acciones de admin (editar label/tipo a mano, borrar
+-- una columna) — poco frecuentes, siempre reconstruyen (no hay un "no cambió nada" barato
+-- de detectar ahí sin comparar antes/después fila por fila, y no vale la pena).
+create or replace function public._trg_refrescar_leads_completo() returns trigger
+language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  begin
+    perform public.refrescar_leads_completo();
+  exception when others then
+    raise warning 'refrescar_leads_completo fallo: %', sqlerrm;
+  end;
+  return null;
+end $$;
+
+create trigger trg_columnas_extra_refrescar_upd_del
+  after update or delete on public.columnas_extra
   for each statement execute function public._trg_refrescar_leads_completo();
 
 -- ================= backfill =================
@@ -199,11 +300,7 @@ create trigger trg_columnas_extra_refrescar
 insert into public.columnas_extra (key, label)
 select distinct k, k
 from public.leads, lateral jsonb_object_keys(extra) k
-where k ~ '^[a-z0-9_]+$' and k <> all (array[
-  'nombres', 'apellido', 'email', 'telefono', 'empresa', 'ruc', 'cargo', 'rubro',
-  'fecha_nacimiento', 'status', 'extra', 'id', 'fuente_id', 'created_at', 'actualizado_en',
-  'duplicado_de', 'id_externo', 'origen', 'user_agent', 'evento'
-])
+where k ~ '^[a-z0-9_]{1,63}$' and k <> all (public._claves_reservadas())
 on conflict (key) do nothing;
 
 select public.refrescar_leads_completo();
