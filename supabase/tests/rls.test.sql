@@ -1,5 +1,5 @@
 begin;
-select plan(9);
+select plan(14);
 
 -- usuarios de prueba
 insert into auth.users (id, email) values
@@ -39,6 +39,29 @@ select throws_ok($$ insert into public.leads (fuente_id, email) values ('1000000
   '42501', null, 'editor no inserta en fuente ajena');
 select throws_ok($$ insert into public.fuentes (nombre, slug, tipo) values ('X','x','landing') $$,
   '42501', null, 'editor no crea fuentes');
+
+-- escalamiento de privilegios: un editor no puede auto-promoverse a admin.
+update public.perfiles set rol = 'admin' where user_id = '00000000-0000-0000-0000-00000000000e';
+select is((select rol from public.perfiles where user_id = '00000000-0000-0000-0000-00000000000e'),
+  'editor', 'editor no puede cambiar su propio rol a admin');
+
+-- escalamiento de privilegios: un editor no puede darse acceso a otra fuente.
+select throws_ok($$ insert into public.perfil_fuentes values
+  ('00000000-0000-0000-0000-00000000000e', '10000000-0000-0000-0000-000000000002') $$,
+  '42501', null, 'editor no se auto-asigna a fuente ajena');
+
+-- escalamiento de privilegios: un editor no puede "mover" un lead a otra fuente
+-- para saltarse el scoping (with check se re-evalúa contra la fuente nueva).
+select throws_ok($$ update public.leads set fuente_id = '10000000-0000-0000-0000-000000000002'
+  where email = 'a@f1.com' $$, '42501', null, 'editor no reasigna un lead a fuente ajena');
+
+-- editor no es admin: el delete no lanza error, pero tampoco borra nada (0 filas).
+delete from public.leads;
+select is((select count(*)::int from public.leads where email in ('a@f1.com','b@f2.com')), 1,
+  'editor no admin: delete no borra nada (RLS filtra las filas, no lanza error)');
+
+-- TRUNCATE ignora RLS: debe bloquearse a nivel de GRANT, no de política.
+select throws_ok($$ truncate public.leads $$, '42501', null, 'ningún autenticado puede truncar leads');
 
 select pg_temp.como('00000000-0000-0000-0000-00000000000c', 'aal2');
 select is((select count(*)::int from public.leads where email in ('a@f1.com','b@f2.com')), 1, 'lector ve su fuente');

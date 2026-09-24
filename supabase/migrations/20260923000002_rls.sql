@@ -67,6 +67,12 @@ create policy apps_adm on public.aplicaciones for all to authenticated using (pu
 
 revoke all on public.leads, public.fuentes, public.perfiles, public.perfil_fuentes,
   public.importaciones, public.filtros_guardados, public.aplicaciones, public.api_leads from anon;
+-- Postgres/Supabase otorga por defecto TRUNCATE/REFERENCES/TRIGGER (además de
+-- SELECT/INSERT/UPDATE/DELETE) a `authenticated` en tablas nuevas de public.
+-- TRUNCATE ignora RLS por completo, así que sin este revoke cualquier usuario
+-- autenticado (incluso sin 2FA) podría vaciar `leads` con `truncate ... cascade`.
+revoke all on public.leads, public.fuentes, public.perfiles, public.perfil_fuentes,
+  public.importaciones, public.filtros_guardados, public.aplicaciones from authenticated;
 grant select, insert, update, delete on public.leads, public.fuentes, public.perfiles, public.perfil_fuentes,
   public.filtros_guardados, public.aplicaciones to authenticated;
 grant select, insert on public.importaciones to authenticated;
