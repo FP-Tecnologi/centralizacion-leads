@@ -97,7 +97,7 @@ export function GestionarFuente({ slug, tipo }: { slug: string; tipo: 'landing' 
   const guardarCampos = async () => {
     setErrorGuardado(null);
     if (camposInvalidos) {
-      setErrorGuardado('Hay campos con clave vacía o repetida. Corrígelos antes de guardar.');
+      setErrorGuardado('Hay campos con una clave vacía, con formato inválido o repetida. Corrígelos antes de guardar.');
       return;
     }
     setGuardandoCampos(true);
@@ -198,7 +198,7 @@ export function GestionarFuente({ slug, tipo }: { slug: string; tipo: 'landing' 
             <div className="ax-card__footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--ax-space-3)', borderTop: '1px solid var(--ax-border)' }}>
               {camposInvalidos && (
                 <p role="alert" className="ax-note" style={{ color: 'var(--ax-danger-500)', margin: 0 }}>
-                  Hay campos con clave vacía o repetida. Corrígelos antes de guardar.
+                  Hay campos con una clave vacía, con formato inválido o repetida. Corrígelos antes de guardar.
                 </p>
               )}
               <button type="button" className="ax-btn ax-btn--primary" disabled={guardandoCampos || camposInvalidos} onClick={guardarCampos} style={{ marginInlineStart: 'auto' }}>

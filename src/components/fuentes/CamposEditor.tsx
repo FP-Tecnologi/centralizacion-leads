@@ -7,10 +7,16 @@
  * lo controla GestionarFuente (no un snapshot local al montar), así se refresca
  * solo después de un Guardar exitoso y no permite regenerar la clave de un
  * campo recién guardado. Los campos núcleo (email, telefono, ...) llevan un
- * badge "núcleo". Toda fila con clave vacía o duplicada (clavesInvalidas) se
+ * badge "núcleo" pero son claves válidas como cualquier otra (sobreescriben
+ * tipo/requerido del núcleo — el propio formulario de Expomina las usa así).
+ * La clave escrita a mano se normaliza con normalizarEncabezado al vuelo
+ * (minúsculas, sin acentos/espacios) para que nunca llegue con un formato que
+ * columna() (filtros.ts) luego rechace al filtrar/ordenar por ese campo. Toda
+ * fila con clave vacía, de formato inválido o duplicada (clavesInvalidas) se
  * marca en rojo; GestionarFuente bloquea el Guardar mientras haya alguna.
  */
-import { claveDesdeLabel, clavesInvalidas } from '../../lib/leads/camposUtil';
+import { claveDesdeLabel, clavesInvalidas, type RazonClaveInvalida } from '../../lib/leads/camposUtil';
+import { normalizarEncabezado } from '../../lib/leads/mapeo';
 import { NUCLEO, type CampoFormulario, type TipoCampo } from '../../../supabase/functions/_shared/lead';
 
 const TIPOS: { value: TipoCampo; label: string }[] = [
@@ -22,6 +28,12 @@ const TIPOS: { value: TipoCampo; label: string }[] = [
   { value: 'opcion', label: 'Opción (lista)' },
   { value: 'documento', label: 'Documento' },
 ];
+
+const MENSAJE_RAZON: Record<RazonClaveInvalida, string> = {
+  vacia: 'La clave no puede estar vacía.',
+  formato: 'Solo minúsculas, números y guion bajo (sin espacios ni acentos).',
+  duplicada: 'Esta clave ya está en uso por otro campo.',
+};
 
 function IconoFlecha({ abajo }: { abajo?: boolean }) {
   return (
@@ -79,7 +91,7 @@ export function CamposEditor({
       {value.map((c, i) => {
         const esNucleoCampo = (NUCLEO as readonly string[]).includes(c.key);
         const soloLecturaKey = clavesGuardadas.has(c.key);
-        const claveInvalida = invalidas.has(i);
+        const razon = invalidas.get(i);
         return (
           <div
             key={i}
@@ -99,13 +111,13 @@ export function CamposEditor({
                 className="ax-input ax-input--sm"
                 value={c.key}
                 disabled={soloLecturaKey}
-                onChange={(e) => set(i, { key: e.target.value })}
-                aria-invalid={claveInvalida}
-                aria-describedby={claveInvalida ? `ce-key-err-${i}` : undefined}
+                onChange={(e) => set(i, { key: normalizarEncabezado(e.target.value) })}
+                aria-invalid={!!razon}
+                aria-describedby={razon ? `ce-key-err-${i}` : undefined}
               />
-              {claveInvalida && (
+              {razon && (
                 <p id={`ce-key-err-${i}`} role="alert" className="ax-note" style={{ color: 'var(--ax-danger-500)' }}>
-                  {c.key.trim() ? 'Esta clave ya está en uso por otro campo.' : 'La clave no puede estar vacía.'}
+                  {MENSAJE_RAZON[razon]}
                 </p>
               )}
             </div>
