@@ -7,6 +7,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { PageHead } from '../components/shell/PageHead';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -32,6 +33,7 @@ const PASOS = ['Archivo y fuente', 'Mapear columnas', 'Vista previa y confirmar'
 
 export function Importar() {
   const { esAdmin, puedeEditar } = useAuth();
+  const fuentePreseleccionada = useSearchParams().get('fuente');
   const [paso, setPaso] = useState(0);
   const [maxPaso, setMaxPaso] = useState(0);
 
@@ -69,6 +71,13 @@ export function Importar() {
     if (!puedeEditar) { setFuentes([]); setCargandoFuentes(false); return; }
     listarFuentes().then(setFuentes).catch(() => setFuentes([])).finally(() => setCargandoFuentes(false));
   }, [puedeEditar]);
+
+  // preselecciona la fuente cuando se llega desde "Importar" de una página de Registros.
+  useEffect(() => {
+    if (fuentePreseleccionada && fuentes.some((f) => f.id === fuentePreseleccionada)) {
+      setFuenteId(fuentePreseleccionada);
+    }
+  }, [fuentePreseleccionada, fuentes]);
 
   const irA = (i: number) => { setPaso(i); setMaxPaso((m) => Math.max(m, i)); };
 

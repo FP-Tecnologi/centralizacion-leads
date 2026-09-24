@@ -53,6 +53,14 @@ export async function cambiarEstado(ids: string[], estado: string) {
   if (error) throw error;
 }
 
+export async function eliminarLeads(ids: string[]): Promise<void> {
+  const { data, error } = await supabase.from('leads').delete().in('id', ids).select('id');
+  if (error) throw error;
+  // RLS deja pasar el DELETE sin error para no-admin, pero filtra las filas
+  // (0 borradas): hay que distinguirlo de un borrado real.
+  if (!data?.length) throw new Error('sin_permiso');
+}
+
 export async function listarFuentes(tipo?: Fuente['tipo']): Promise<Fuente[]> {
   let q = supabase.from('fuentes').select('*').order('nombre');
   if (tipo) q = q.eq('tipo', tipo);

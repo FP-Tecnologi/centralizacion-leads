@@ -6,7 +6,6 @@
  * (clases ax-table*, ax-badge--*, ax-checkbox, paginación, estado vacío).
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
-import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
   cambiarEstado,
@@ -26,6 +25,7 @@ import { ChipsFiltros } from './ChipsFiltros';
 import { ColumnasMenu } from './ColumnasMenu';
 import { FiltrosPanel } from './FiltrosPanel';
 import { EditarLeadModal } from './EditarLeadModal';
+import { ConfirmarEliminarModal } from './ConfirmarEliminarModal';
 import { Dropdown } from '../ui/Dropdown';
 
 interface Columna { key: string; label: string; render?: (l: Lead) => string; orden?: string }
@@ -77,7 +77,7 @@ function contarFiltrosActivos(f: FiltroLeads, ocultarFuente: boolean): number {
 }
 
 export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
-  const { puedeEditar } = useAuth();
+  const { puedeEditar, esAdmin } = useAuth();
   const searchParams = useSearchParams();
   const claveColumnas = `leads:columnas:${fuenteFija?.slug ?? 'todas'}`;
 
@@ -101,6 +101,8 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
   const [qInput, setQInput] = useState('');
   const [panelAbierto, setPanelAbierto] = useState(false);
   const [editando, setEditando] = useState<Lead | null>(null);
+  const [eliminando, setEliminando] = useState<{ ids: string[]; titulo: string; descripcion: string } | null>(null);
+  const [mensajeExito, setMensajeExito] = useState<string | null>(null);
   const [fuentes, setFuentes] = useState<Fuente[]>(fuenteFija ? [fuenteFija] : []);
   const [filas, setFilas] = useState<Lead[]>([]);
   const [total, setTotal] = useState(0);
@@ -171,6 +173,11 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
 
   useEffect(() => { cargar(); }, [cargar]);
   useEffect(() => { setSeleccion(new Set()); }, [filtro, orden]);
+  useEffect(() => {
+    if (!mensajeExito) return;
+    const t = setTimeout(() => setMensajeExito(null), 3000);
+    return () => clearTimeout(t);
+  }, [mensajeExito]);
 
   const nombreFuente = (id: string) => fuentes.find((f) => f.id === id)?.nombre ?? id;
 
@@ -221,6 +228,26 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
     } catch (e) {
       setLoteError(e instanceof Error ? e.message : 'No se pudo cambiar el estado. Intenta de nuevo.');
     }
+  };
+
+  const nombreLead = (l: Lead) => `${l.nombres ?? ''} ${l.apellido ?? ''}`.trim() || l.email || 'este lead';
+
+  const pedirEliminarFila = (l: Lead) => setEliminando({
+    ids: [l.id],
+    titulo: 'Eliminar lead',
+    descripcion: `¿Eliminar a ${nombreLead(l)}${l.email ? ` (${l.email})` : ''}?`,
+  });
+  const pedirEliminarLote = () => setEliminando({
+    ids: [...seleccion],
+    titulo: 'Eliminar leads seleccionados',
+    descripcion: `¿Eliminar ${seleccion.size} lead${seleccion.size === 1 ? '' : 's'} seleccionado${seleccion.size === 1 ? '' : 's'}?`,
+  });
+  const alEliminar = () => {
+    const n = eliminando?.ids.length ?? 1;
+    setEliminando(null);
+    setSeleccion(new Set());
+    setMensajeExito(n === 1 ? 'Lead eliminado' : `${n} leads eliminados`);
+    cargar();
   };
 
   const exportar = async (formato: 'xlsx' | 'csv') => {
@@ -290,12 +317,6 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
                   </>
                 )}
               </Dropdown>
-              {puedeEditar && (
-                <Link href="/leads/importar" className="ax-btn ax-btn--secondary ax-btn--sm">
-                  <svg className="ax-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2" /><path d="M7 9l5 -5l5 5" /><path d="M12 4l0 12" /></svg>
-                  <span className="ax-btn__label">Importar</span>
-                </Link>
-              )}
             </div>
           </div>
 
@@ -311,11 +332,20 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
                 <option value="" disabled>Cambiar estado…</option>
                 {ESTADOS.map((e) => <option key={e} value={e}>{e}</option>)}
               </select>
+              {esAdmin && (
+                <button type="button" className="ax-btn ax-btn--danger ax-btn--sm" onClick={pedirEliminarLote}>
+                  Eliminar seleccionados
+                </button>
+              )}
               <span style={{ flex: '1 1 auto' }} />
               <button type="button" className="ax-btn ax-btn--ghost ax-btn--icon ax-btn--sm" aria-label="Limpiar selección" onClick={() => setSeleccion(new Set())}>
                 <svg className="ax-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6l-12 12" /><path d="M6 6l12 12" /></svg>
               </button>
             </div>
+          )}
+
+          {mensajeExito && (
+            <p role="status" style={{ margin: '0 var(--ax-space-5) var(--ax-space-3)', color: 'var(--ax-success-500)', fontSize: 'var(--ax-text-sm)' }}>{mensajeExito}</p>
           )}
 
           {loteError && (
@@ -367,7 +397,7 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
                         ) : c.label}
                       </th>
                     ))}
-                    <th className="ax-table__th" scope="col" style={{ width: 44 }}><span className="ax-visually-hidden">Acciones</span></th>
+                    <th className="ax-table__th" scope="col" style={{ width: 80 }}><span className="ax-visually-hidden">Acciones</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -390,15 +420,27 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
                           ) : c.render ? c.render(l) : (l[c.key as keyof Lead] as string) || '—'}
                         </td>
                       ))}
-                      <td className="ax-table__td" style={{ textAlign: 'end' }}>
+                      <td className="ax-table__td" style={{ textAlign: 'end', whiteSpace: 'nowrap' }}>
                         <button
                           type="button"
                           className="ax-btn ax-btn--ghost ax-btn--icon ax-btn--sm"
+                          title={puedeEditar ? 'Editar' : 'Ver'}
                           aria-label={`${puedeEditar ? 'Editar' : 'Ver'} ${l.nombres ?? l.email ?? 'lead'}`}
                           onClick={() => setEditando(l)}
                         >
                           <svg className="ax-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 7h-1a2 2 0 0 0 -2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2 -2v-1" /><path d="M20.385 6.585a2.1 2.1 0 0 0 -2.97 -2.97l-8.415 8.385v3h3l8.385 -8.415z" /><path d="M16 5l3 3" /></svg>
                         </button>
+                        {esAdmin && (
+                          <button
+                            type="button"
+                            className="ax-btn ax-btn--ghost ax-btn--icon ax-btn--sm"
+                            title="Eliminar"
+                            aria-label={`Eliminar ${l.nombres ?? l.email ?? 'lead'}`}
+                            onClick={() => pedirEliminarFila(l)}
+                          >
+                            <svg className="ax-btn__icon" viewBox="0 0 24 24" fill="none" stroke="var(--ax-danger-500)" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 7l16 0" /><path d="M10 11l0 6" /><path d="M14 11l0 6" /><path d="M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12" /><path d="M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3" /></svg>
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -460,6 +502,16 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
           puedeEditar={puedeEditar}
           onCerrar={() => setEditando(null)}
           onGuardado={() => { setEditando(null); cargar(); }}
+        />
+      )}
+
+      {eliminando && (
+        <ConfirmarEliminarModal
+          titulo={eliminando.titulo}
+          descripcion={eliminando.descripcion}
+          ids={eliminando.ids}
+          onCerrar={() => setEliminando(null)}
+          onEliminado={alEliminar}
         />
       )}
     </>
