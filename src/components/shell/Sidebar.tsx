@@ -14,6 +14,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { useAuth } from '../../context/AuthContext';
+import { useFuentesMenu } from '../../hooks/useFuentesMenu';
+import type { Fuente } from '../../lib/leads/datos';
 import {
   manifest,
   sections,
@@ -79,6 +81,76 @@ function Leaf({ node, level, activeSlug, roleName }: LeafProps) {
       <span className="ax-nav__label">{node.title}</span>
       <Badge badge={node.badge} />
     </Link>
+  );
+}
+
+/* Hijo simple "Todas las X" (nivel 2, sin submenú) para grp.landings/grp.offline. */
+function TodasFuentesLeaf({ base, label, level, activeSlug }: { base: string; label: string; level: number; activeSlug: string }) {
+  const isActive = activeSlug === base;
+  const cls = ['ax-nav__item', 'ax-nav__item--child'];
+  if (isActive) cls.push('ax-nav__item--active', 'is-active');
+  return (
+    <Link className={cls.join(' ')} role="treeitem" aria-level={level} aria-current={isActive ? 'page' : undefined} href={`/${base}`}>
+      <span className="ax-nav__bar" aria-hidden="true"></span>
+      <span className="ax-nav__label">{label}</span>
+    </Link>
+  );
+}
+
+/* Submenú por fuente (nivel 2): Gestionar / Registros. */
+function FuenteSubgrupo({ f, base, level, activeSlug }: { f: Fuente; base: string; level: number; activeSlug: string }) {
+  const slugGestionar = `${base}/${f.slug}`;
+  const slugRegistros = `${base}/${f.slug}/registros`;
+  const containsActive = activeSlug === slugGestionar || activeSlug === slugRegistros;
+  const [open, setOpen] = useState(containsActive);
+  const isOpen = open || containsActive;
+  const parentCls = ['ax-nav__item', 'ax-nav__item--parent', 'ax-nav__item--child'];
+  if (containsActive) parentCls.push('ax-nav__item--trail');
+  return (
+    <div className={`ax-nav__group${isOpen ? ' is-open' : ''}`} data-ax-collapse>
+      <button type="button" className={parentCls.join(' ')} role="treeitem" aria-level={level} aria-expanded={isOpen} onClick={() => setOpen((o) => !o)}>
+        <span className="ax-nav__label">{f.nombre}</span>
+        {f.estado === 'cerrada' && <span className="ax-badge ax-badge--neutral ax-badge--sm" style={{ marginInlineStart: 6 }}>cerrada</span>}
+        {CARET}
+      </button>
+      <div className="ax-nav__children" role="group" data-ax-collapse-panel hidden={!isOpen}>
+        <Link
+          className={`ax-nav__item ax-nav__item--child${activeSlug === slugGestionar ? ' ax-nav__item--active is-active' : ''}`}
+          role="treeitem"
+          aria-level={level + 1}
+          aria-current={activeSlug === slugGestionar ? 'page' : undefined}
+          href={`/${slugGestionar}`}
+        >
+          <span className="ax-nav__bar" aria-hidden="true"></span>
+          <span className="ax-nav__label">Gestionar</span>
+        </Link>
+        <Link
+          className={`ax-nav__item ax-nav__item--child${activeSlug === slugRegistros ? ' ax-nav__item--active is-active' : ''}`}
+          role="treeitem"
+          aria-level={level + 1}
+          aria-current={activeSlug === slugRegistros ? 'page' : undefined}
+          href={`/${slugRegistros}`}
+        >
+          <span className="ax-nav__bar" aria-hidden="true"></span>
+          <span className="ax-nav__label">Registros</span>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+/* Hijos dinámicos de grp.landings/grp.offline: fuentes de la tabla `fuentes`
+   (Task 13). Solo se monta para esos dos nodos, así useFuentesMenu no se
+   llama en el resto del árbol. */
+function FuentesInyectadas({ tipo, level, activeSlug }: { tipo: 'landing' | 'offline'; level: number; activeSlug: string }) {
+  const fuentes = useFuentesMenu(tipo);
+  const base = tipo === 'landing' ? 'landings' : 'offline';
+  const allLabel = tipo === 'landing' ? 'Todas las landings' : 'Todas las apps offline';
+  return (
+    <>
+      <TodasFuentesLeaf base={base} label={allLabel} level={level} activeSlug={activeSlug} />
+      {fuentes.map((f) => <FuenteSubgrupo key={f.id} f={f} base={base} level={level} activeSlug={activeSlug} />)}
+    </>
   );
 }
 
@@ -154,8 +226,8 @@ function Group({ node, level, activeSlug, roleName }: GroupProps) {
             />
           ),
         )}
-        {/* ponytail: hook point — Task 13 inyecta aquí los hijos dinámicos de
-            "grp.landings" / "grp.offline" leídos de la tabla fuentes. */}
+        {node.id === 'grp.landings' && <FuentesInyectadas tipo="landing" level={level + 1} activeSlug={activeSlug} />}
+        {node.id === 'grp.offline' && <FuentesInyectadas tipo="offline" level={level + 1} activeSlug={activeSlug} />}
       </div>
     </div>
   );
