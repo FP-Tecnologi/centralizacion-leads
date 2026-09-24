@@ -1,0 +1,18 @@
+{
+  "$schema": "fptecnologi-nav-manifest/v1",
+  "meta": { "comment": "Menú del Sistema de Leads. Las landings y apps offline se inyectan dinámicamente desde la tabla fuentes (Sidebar).", "sections": ["PRINCIPAL", "FUENTES", "ADMINISTRACIÓN"] },
+  "nodes": [
+    { "id": "panel.dashboard", "title": "Dashboard", "slug": "", "icon": "layout-dashboard", "parent": null, "section": "PRINCIPAL", "order": 1, "badge": null, "keywords": ["inicio", "graficas", "resumen"], "inMenu": true, "alias": null },
+    { "id": "grp.leads", "title": "Leads", "slug": "leads", "icon": "users-group", "parent": null, "section": "PRINCIPAL", "order": 2, "badge": null, "keywords": ["leads", "tabla"], "inMenu": true, "alias": null },
+    { "id": "leads.tabla", "title": "Todos los leads", "slug": "leads", "icon": "components", "parent": "grp.leads", "section": null, "order": 1, "badge": null, "keywords": ["tabla", "filtros", "buscar"], "inMenu": true, "alias": null },
+    { "id": "leads.importar", "title": "Importar", "slug": "leads/importar", "icon": "upload", "parent": "grp.leads", "section": null, "order": 2, "badge": null, "keywords": ["excel", "csv", "importar"], "inMenu": true, "alias": null, "roles": ["editor"] },
+    { "id": "grp.landings", "title": "Landings", "slug": "landings", "icon": "world", "parent": null, "section": "FUENTES", "order": 1, "badge": null, "keywords": ["landing", "campaña", "formulario"], "inMenu": true, "alias": null },
+    { "id": "grp.offline", "title": "Apps offline", "slug": "offline", "icon": "folders", "parent": null, "section": "FUENTES", "order": 2, "badge": null, "keywords": ["offline", "sincronizar"], "inMenu": true, "alias": null },
+    { "id": "exportacion", "title": "Exportación y conexiones", "slug": "exportacion", "icon": "apps", "parent": null, "section": "ADMINISTRACIÓN", "order": 1, "badge": null, "keywords": ["exportar", "api", "conectar", "hub"], "inMenu": true, "alias": null },
+    { "id": "usuarios", "title": "Usuarios", "slug": "usuarios", "icon": "user", "parent": null, "section": "ADMINISTRACIÓN", "order": 2, "badge": null, "keywords": ["usuarios", "roles"], "inMenu": true, "alias": null, "roles": ["admin"] },
+    { "id": "auth.sign-in", "title": "Ingresar", "slug": "auth/sign-in", "icon": "login", "parent": null, "section": null, "order": 99, "badge": null, "keywords": [], "inMenu": false, "alias": null },
+    { "id": "auth.two-step-totp", "title": "Verificación en dos pasos", "slug": "auth/two-step-totp", "icon": "shield", "parent": null, "section": null, "order": 99, "badge": null, "keywords": [], "inMenu": false, "alias": null },
+    { "id": "auth.activar-2fa", "title": "Activar 2FA", "slug": "auth/activar-2fa", "icon": "shield", "parent": null, "section": null, "order": 99, "badge": null, "keywords": [], "inMenu": false, "alias": null },
+    { "id": "auth.crear-clave", "title": "Crear contraseña", "slug": "auth/crear-clave", "icon": "key", "parent": null, "section": null, "order": 99, "badge": null, "keywords": [], "inMenu": false, "alias": null }
+  ]
+}

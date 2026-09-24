@@ -1,0 +1,377 @@
+/*
+ * FPTecnologi-HUB — HTML reference edition · appshell.css
+ * ────────────────────────────────────────────────────────────────────────
+ * FULL-SCREEN APP SHELL — the chrome for the 13 standalone app pages under
+ * src/html/apps/**. These pages deliberately have NO sidebar and NO regular
+ * header; they own the whole viewport, the way a real mail/chat/board client
+ * does, and each app scrolls inside its own panes rather than scrolling the
+ * document.
+ *
+ * Skeleton (partials/app-bar.html + the page):
+ *   <body class="ax-app-body">
+ *     <div class="ax-ambient"><i></i></div>
+ *     <div class="ax-applayout">
+ *       <header class="ax-appbar">…</header>          ← this file
+ *       <main class="ax-appmain" id="ax-main">
+ *         <div class="ax-apphead">…status + actions…</div>   (optional)
+ *         <div class="… ax-app-fill">…the app…</div>         (fills the rest)
+ *       </main>
+ *     </div>
+ *     <aside class="ax-customizer">…</aside>
+ *
+ * WHY .ax-appbar AND NOT .ax-header --
+ *   base.css moves .ax-header around for six shell styles / nav modes /
+ *   header positions, with selectors reaching 0,5,0 specificity
+ *   ([data-ax-header-position][data-ax-shell-style]:not()… .ax-header). Those
+ *   attributes persist on <html> from localStorage, so an app page opened
+ *   after the user picked "detached" would inherit a floating, sidebar-offset
+ *   bar. A separate class is immune by construction. schemes.css widens its
+ *   selectors to :is(.ax-header, .ax-appbar) so the chosen HEADER SCHEME
+ *   (dark / brand / gradient / transparent) still applies to both.
+ *
+ * Unlayered on purpose — same as base.css/shell.css chrome.
+ */
+
+/* ════════════════════════════════════════════════════════════════════════
+   1 · VIEWPORT FRAME
+   The document itself never scrolls: the bar is a fixed-height row and the
+   app column takes the remaining space. Uses svh so mobile browser chrome
+   collapsing doesn't leave a gap under the app.
+   ════════════════════════════════════════════════════════════════════════ */
+.ax-app-body {
+  overflow: hidden;
+}
+
+.ax-applayout {
+  position: relative;
+  z-index: 1; /* above the fixed .ax-ambient glow layer */
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  block-size: 100vh;
+  block-size: 100svh;
+  overflow: hidden;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   2 · APP BAR — in-flow first row (mirrors .ax-header's glass chrome)
+   ════════════════════════════════════════════════════════════════════════ */
+.ax-appbar {
+  position: relative;
+  z-index: var(--ax-z-header);
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--ax-space-2);
+  block-size: var(--ax-header-h);
+  padding-inline: var(--ax-space-4);
+  background: var(--ax-header-bg, var(--ax-surface-raised));
+  color: var(--ax-header-fg, var(--ax-text));
+  border-block-end: 1px solid var(--ax-header-border, var(--ax-border));
+  -webkit-backdrop-filter: blur(12px) saturate(1.05);
+  backdrop-filter: blur(12px) saturate(1.05);
+}
+
+/* ── BRAND — doubles as the way out, back to the dashboard ── */
+.ax-appbar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ax-space-2);
+  flex: 0 0 auto;
+  padding-inline: var(--ax-space-2);
+  padding-block: var(--ax-space-1);
+  border-radius: var(--ax-radius-md);
+  color: var(--ax-header-fg-strong, var(--ax-text-strong));
+  text-decoration: none;
+  transition: background var(--ax-motion-fast) var(--ax-ease-standard);
+}
+.ax-appbar__brand:hover,
+.ax-appbar__brand:focus-visible {
+  background: var(--ax-header-hover, var(--ax-fill-hover));
+  outline: none;
+}
+.ax-appbar__mark {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.ax-appbar__wordmark {
+  font-family: var(--ax-font-display);
+  font-size: var(--ax-text-sm);
+  font-weight: var(--ax-weight-bold);
+  letter-spacing: 0.08em;
+}
+/* the ← glyph only appears on hover/focus, so the bar reads as a brand at
+   rest and as an exit affordance the moment it's a target */
+.ax-appbar__exit {
+  inline-size: var(--ax-icon-sm);
+  block-size: var(--ax-icon-sm);
+  opacity: 0;
+  margin-inline-start: calc(var(--ax-space-1) * -1);
+  transition: opacity var(--ax-motion-fast) var(--ax-ease-standard);
+}
+.ax-appbar__brand:hover .ax-appbar__exit,
+.ax-appbar__brand:focus-visible .ax-appbar__exit {
+  opacity: 1;
+}
+
+.ax-appbar__divider {
+  flex: 0 0 auto;
+  inline-size: 1px;
+  block-size: 22px;
+  margin-inline: var(--ax-space-1);
+  background: var(--ax-header-border, var(--ax-border));
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   3 · APP SWITCHER — current app name + jump to any other app
+   ════════════════════════════════════════════════════════════════════════ */
+.ax-appswitch {
+  position: relative;
+  display: inline-flex;
+  flex: 0 1 auto;
+  min-inline-size: 0;
+}
+.ax-appswitch__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ax-space-2);
+  min-inline-size: 0;
+  block-size: 34px;
+  padding-inline: var(--ax-space-3);
+  font-family: inherit;
+  font-size: var(--ax-text-sm);
+  font-weight: var(--ax-weight-semibold);
+  color: var(--ax-header-fg-strong, var(--ax-text-strong));
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--ax-radius-md);
+  cursor: pointer;
+  transition:
+    background var(--ax-motion-fast) var(--ax-ease-standard),
+    border-color var(--ax-motion-fast) var(--ax-ease-standard);
+}
+.ax-appswitch__trigger:hover,
+.ax-appswitch__trigger[aria-expanded='true'] {
+  background: var(--ax-header-hover, var(--ax-fill-hover));
+  border-color: var(--ax-header-border, var(--ax-border));
+}
+.ax-appswitch__name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ax-appswitch__caret {
+  flex: 0 0 auto;
+  inline-size: var(--ax-icon-sm);
+  block-size: var(--ax-icon-sm);
+  color: var(--ax-header-fg, var(--ax-text-muted));
+  transition: transform var(--ax-motion-fast) var(--ax-ease-standard);
+}
+.ax-appswitch__trigger[aria-expanded='true'] .ax-appswitch__caret {
+  transform: rotate(180deg);
+}
+
+/* floating panel — same recipe as the header menus, but anchored to the
+   INLINE-START edge because the switcher sits on the leading side of the bar */
+.ax-appswitch__menu {
+  display: block;
+  position: absolute;
+  inset-block-start: calc(100% + var(--ax-space-2));
+  inset-inline-start: 0;
+  z-index: var(--ax-z-dropdown);
+  inline-size: max-content;
+  min-inline-size: 248px;
+  max-inline-size: min(92vw, 320px);
+  max-block-size: min(72vh, 560px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--ax-space-2);
+  color: var(--ax-text);
+  background: var(--ax-surface-solid);
+  border: 1px solid var(--ax-border);
+  border-radius: var(--ax-radius-lg);
+  box-shadow: var(--ax-shadow-lg);
+}
+.ax-appswitch__item {
+  display: flex;
+  align-items: center;
+  gap: var(--ax-space-3);
+  inline-size: 100%;
+  padding: var(--ax-space-2) var(--ax-space-3);
+  font-size: var(--ax-text-sm);
+  color: var(--ax-text);
+  text-decoration: none;
+  border-radius: var(--ax-radius-md);
+  transition: background var(--ax-motion-instant) var(--ax-ease-standard);
+}
+.ax-appswitch__item:hover,
+.ax-appswitch__item:focus-visible {
+  background: var(--ax-fill-hover);
+  color: var(--ax-text-strong);
+  outline: none;
+}
+/* current app — set by the partial's x-init from <html data-ax-route> */
+.ax-appswitch__item.is-active {
+  color: var(--ax-accent);
+  background: var(--ax-accent-wash);
+  font-weight: var(--ax-weight-semibold);
+}
+.ax-appswitch__icon {
+  flex: 0 0 auto;
+  inline-size: var(--ax-icon-md);
+  block-size: var(--ax-icon-md);
+  color: var(--ax-text-subtle);
+}
+.ax-appswitch__item:hover .ax-appswitch__icon,
+.ax-appswitch__item.is-active .ax-appswitch__icon {
+  color: inherit;
+}
+.ax-appswitch__label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.ax-appswitch__item .ax-badge {
+  flex: 0 0 auto;
+}
+
+/* the bar's search sits between the switcher and the spacer — let it shrink
+   before the app name does */
+.ax-search--app {
+  flex: 0 1 auto;
+  margin-inline-start: var(--ax-space-2);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   4 · APP COLUMN
+   .ax-appmain is the only scroll container. Children are laid out in a
+   column; ONE child per page may carry .ax-app-fill to claim the leftover
+   height (the 3-pane clients, the board, the player). Pages whose content is
+   a long list (gallery, tasks, settings) simply omit it and scroll.
+   ════════════════════════════════════════════════════════════════════════ */
+.ax-appmain {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ax-space-4);
+  padding: var(--ax-space-4) var(--ax-space-5) var(--ax-space-5);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.ax-appmain > * {
+  flex: 0 0 auto;
+  min-block-size: 0;
+}
+.ax-appmain > .ax-app-fill {
+  flex: 1 1 auto;
+}
+/* a filling child owns its own internal scrolling, so the column must not
+   also scroll — otherwise a nested pane can push the page taller */
+.ax-appmain:has(> .ax-app-fill) {
+  overflow: hidden;
+}
+
+/* Below the pane breakpoint the multi-pane clients collapse to a single
+   column, and a stacked pane has no height to inherit. Hand the column its
+   scrollbar back and give the app a workable fixed height instead — the same
+   deal the pre-app-shell pages had. */
+@media (max-width: 991.98px) {
+  .ax-appmain:has(> .ax-app-fill) {
+    overflow: auto;
+  }
+  .ax-appmain > .ax-app-fill {
+    flex: 0 0 auto;
+    min-block-size: 560px;
+  }
+}
+
+/* ── APP HEAD — slim status + actions strip.
+      Replaces .ax-page-head on these pages: the breadcrumb and <h1> are gone
+      (the bar names the app), leaving only the live status line and the
+      page's primary actions. ── */
+.ax-apphead {
+  display: flex;
+  align-items: center;
+  gap: var(--ax-space-3);
+  flex-wrap: wrap;
+}
+.ax-apphead__status {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  margin: 0;
+  font-size: var(--ax-text-sm);
+  color: var(--ax-text-muted);
+}
+.ax-apphead__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ax-space-2);
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   5 · RESPONSIVE
+   ════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 991.98px) {
+  /* The ⌘K FIELD is the first thing to go — the app switcher matters more on a
+     narrow bar. The TRIGGER stays: dropping it (as this did) left the command
+     palette reachable only by ⌘K, i.e. not at all on the phones and tablets
+     this breakpoint is for. Collapse it to the 38px icon button instead —
+     exactly what the main header does below md. */
+  .ax-search--app {
+    flex: 0 0 auto;
+    inline-size: 38px;
+    min-inline-size: 38px;
+    max-inline-size: 38px;
+    padding-inline: 0;
+    justify-content: center;
+    border-radius: var(--ax-radius-md);
+  }
+  .ax-search--app .ax-search__placeholder,
+  .ax-search--app .ax-search__keycap {
+    display: none;
+  }
+  .ax-search--app .ax-search__icon {
+    inline-size: var(--ax-icon-md);
+    block-size: var(--ax-icon-md);
+  }
+}
+
+@media (max-width: 767.98px) {
+  /* tighter gutter + gap, mirroring .ax-header at this width: the eight-slot bar
+     has no spare pixels here, and at the default 8px gap the app name was being
+     squeezed to a 2px sliver next to its chevron */
+  .ax-appbar {
+    padding-inline: var(--ax-space-3);
+    gap: var(--ax-space-1);
+  }
+  .ax-appbar__wordmark,
+  .ax-appbar__divider {
+    display: none;
+  }
+  /* the ← exit glyph only ever reveals itself on hover, which a phone does not
+     have — so here it is 16px of permanently invisible bar */
+  .ax-appbar__exit {
+    display: none;
+  }
+  /* and the last few px the app name needs to spell itself out */
+  .ax-appswitch__trigger {
+    padding-inline: var(--ax-space-2);
+    gap: var(--ax-space-1);
+  }
+  .ax-appmain {
+    gap: var(--ax-space-3);
+    padding: var(--ax-space-3);
+  }
+  .ax-apphead {
+    gap: var(--ax-space-2);
+  }
+}
+
+/* ── RTL: the exit chevron is directional ── */
+[dir='rtl'] .ax-appbar__exit {
+  transform: scaleX(-1);
+}
