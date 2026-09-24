@@ -1,5 +1,5 @@
 import { supabase } from '../supabase';
-import { aplicarFiltro, type FiltroLeads } from './filtros';
+import { aplicarFiltro, columna, type FiltroLeads } from './filtros';
 import type { CampoFormulario } from '../../../supabase/functions/_shared/lead';
 
 export const ESTADOS = ['nuevo', 'contactado', 'asistio', 'descartado'] as const;
@@ -22,7 +22,7 @@ const SELECT = '*, fuentes(nombre, slug)';
 
 function base(f: FiltroLeads, orden: Orden) {
   const q = supabase.from('leads').select(SELECT, { count: 'exact' }).is('duplicado_de', null);
-  return aplicarFiltro(q, f).order(orden.campo, { ascending: orden.asc }).order('id');
+  return aplicarFiltro(q, f).order(columna(orden.campo), { ascending: orden.asc }).order('id');
 }
 
 export async function listarLeads(f: FiltroLeads, orden: Orden, pagina: number, porPagina: number) {

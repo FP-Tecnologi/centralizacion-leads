@@ -16,6 +16,7 @@ describe('columna', () => {
   it('núcleo directo, resto en extra', () => {
     expect(columna('email')).toBe('email');
     expect(columna('status')).toBe('status');
+    expect(columna('created_at')).toBe('created_at');
     expect(columna('talla')).toBe('extra->>talla');
   });
   it('rechaza claves con caracteres peligrosos', () => {
