@@ -7,22 +7,26 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
   cambiarEstado,
   ESTADOS,
   listarFuentes,
   listarLeads,
+  todosLosLeads,
   type Fuente,
   type Lead,
   type Orden,
 } from '../../lib/leads/datos';
 import { esNucleo } from '../../../supabase/functions/_shared/lead';
 import { FILTRO_VACIO, type FiltroLeads } from '../../lib/leads/filtros';
+import { exportarLeads } from '../../lib/leads/exportar';
 import { useAuth } from '../../context/AuthContext';
 import { ChipsFiltros } from './ChipsFiltros';
 import { ColumnasMenu } from './ColumnasMenu';
 import { FiltrosPanel } from './FiltrosPanel';
 import { EditarLeadModal } from './EditarLeadModal';
+import { Dropdown } from '../ui/Dropdown';
 
 interface Columna { key: string; label: string; render?: (l: Lead) => string; orden?: string }
 
@@ -74,6 +78,7 @@ function contarFiltrosActivos(f: FiltroLeads, ocultarFuente: boolean): number {
 
 export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
   const { puedeEditar } = useAuth();
+  const searchParams = useSearchParams();
   const claveColumnas = `leads:columnas:${fuenteFija?.slug ?? 'todas'}`;
 
   const columnas = useMemo<Columna[]>(() => {
@@ -83,7 +88,11 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
     return [...BASE, ...extra];
   }, [fuenteFija]);
 
-  const [filtro, setFiltro] = useState<FiltroLeads>(() => (fuenteFija ? { ...FILTRO_VACIO, fuentes: [fuenteFija.id] } : FILTRO_VACIO));
+  const [filtro, setFiltro] = useState<FiltroLeads>(() => {
+    if (fuenteFija) return { ...FILTRO_VACIO, fuentes: [fuenteFija.id] };
+    const fuenteQuery = searchParams.get('fuente');
+    return fuenteQuery ? { ...FILTRO_VACIO, fuentes: [fuenteQuery] } : FILTRO_VACIO;
+  });
   const [orden, setOrden] = useState<Orden>({ campo: 'created_at', asc: false });
   const [pagina, setPagina] = useState(1);
   const [porPagina, setPorPagina] = useState(25);
@@ -99,6 +108,8 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
   const [error, setError] = useState<string | null>(null);
   const [columnasListas, setColumnasListas] = useState(false);
   const [loteError, setLoteError] = useState<string | null>(null);
+  const [exportando, setExportando] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const cargaId = useRef(0);
 
@@ -212,6 +223,21 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
     }
   };
 
+  const exportar = async (formato: 'xlsx' | 'csv') => {
+    setExportError(null);
+    setExportando(true);
+    try {
+      const columnasExport = columnasVisibles.map(({ key, label }) => ({ key, label }));
+      const registros = seleccion.size ? filas.filter((l) => seleccion.has(l.id)) : await todosLosLeads(filtro, orden);
+      const fecha = new Date().toISOString().slice(0, 10);
+      await exportarLeads(registros, columnasExport, formato, `leads-${fecha}`);
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : 'No se pudo exportar. Intenta de nuevo.');
+    } finally {
+      setExportando(false);
+    }
+  };
+
   const totalPaginas = Math.max(1, Math.ceil(total / porPagina));
   const desde = total ? (pagina - 1) * porPagina + 1 : 0;
   const hasta = Math.min(pagina * porPagina, total);
@@ -246,6 +272,24 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
                 <span className="ax-btn__label">Filtros{contadorFiltros > 0 ? ` (${contadorFiltros})` : ''}</span>
               </button>
               <ColumnasMenu columnas={columnas.map(({ key, label }) => ({ key, label }))} visibles={visibles} onCambiar={setVisibles} />
+              <Dropdown
+                className="ax-dropdown-wrap"
+                panelClassName="ax-dropdown"
+                panelAriaLabel="Exportar leads"
+                trigger={({ triggerProps }) => (
+                  <button type="button" className="ax-btn ax-btn--secondary ax-btn--sm" disabled={exportando} {...triggerProps}>
+                    <svg className="ax-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2" /><path d="M7 11l5 5l5 -5" /><path d="M12 4l0 12" /></svg>
+                    <span className="ax-btn__label">{exportando ? 'Preparando…' : 'Exportar'}</span>
+                  </button>
+                )}
+              >
+                {({ close }) => (
+                  <>
+                    <button type="button" className="ax-menu__item" onClick={() => { close(); exportar('xlsx'); }}>Excel (.xlsx)</button>
+                    <button type="button" className="ax-menu__item" onClick={() => { close(); exportar('csv'); }}>CSV (.csv)</button>
+                  </>
+                )}
+              </Dropdown>
               {puedeEditar && (
                 <Link href="/leads/importar" className="ax-btn ax-btn--secondary ax-btn--sm">
                   <svg className="ax-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2" /><path d="M7 9l5 -5l5 5" /><path d="M12 4l0 12" /></svg>
@@ -276,6 +320,10 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
 
           {loteError && (
             <p role="alert" style={{ margin: '0 var(--ax-space-5) var(--ax-space-3)', color: 'var(--ax-danger-500)', fontSize: 'var(--ax-text-sm)' }}>{loteError}</p>
+          )}
+
+          {exportError && (
+            <p role="alert" style={{ margin: '0 var(--ax-space-5) var(--ax-space-3)', color: 'var(--ax-danger-500)', fontSize: 'var(--ax-text-sm)' }}>{exportError}</p>
           )}
 
           {error && (
