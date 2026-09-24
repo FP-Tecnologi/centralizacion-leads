@@ -105,6 +105,42 @@
 .ax-cluster--between {
   justify-content: space-between;
 }
+
+/* ── Inline filter bar — a row of fixed/auto-width fields (unlike .ax-cluster,
+   whose .ax-input/.ax-select children still stretch full-width and each wrap
+   onto their own row). Give each .ax-field wrapper an explicit min-width +
+   flex: 0 0 auto inline; wraps to multiple rows on narrow viewports. ───── */
+.ax-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--ax-space-3);
+}
+
+/* ── KPI row — N equal columns, independent of the 12-col .ax-dash-grid (whose
+   span-3 default only tiles cleanly in multiples of 4). Narrows gracefully. */
+.ax-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(var(--ax-kpi-cols, 5), minmax(0, 1fr));
+  gap: var(--ax-space-6);
+  margin-block-end: var(--ax-space-6);
+}
+@media (max-width: 992px) {
+  .ax-kpi-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 768px) {
+  .ax-kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--ax-space-4);
+  }
+}
+@media (max-width: 480px) {
+  .ax-kpi-row {
+    grid-template-columns: 1fr;
+  }
+}
 .ax-center {
   display: grid;
   place-items: center;
