@@ -38,16 +38,38 @@ export function sugerirMapeo(encabezados: string[], campos: CampoFormulario[]): 
   return out;
 }
 
-export function construirFilas(filas: Record<string, unknown>[], mapeo: Mapeo, campos: CampoFormulario[]) {
+// Fila de entrada a construirFilas: `fila` es el número real de fila de Excel (1-based,
+// contando el encabezado) cuando se conoce (viene de parsearBuffer/FilaLeida); si no se da,
+// se cae a i+2 (posición + fila de encabezado), asumiendo filas contiguas sin huecos.
+export interface FilaEntrada { fila?: number; datos: Record<string, unknown> }
+
+function vacio(v: unknown): boolean {
+  return v === undefined || v === null || String(v).trim() === '';
+}
+
+export function construirFilas(filas: FilaEntrada[], mapeo: Mapeo, campos: CampoFormulario[]) {
   const validas: { fila: number; lead: LeadEntrada }[] = [];
   const errores: { fila: number; errores: ErrorCampo[]; original: Record<string, unknown> }[] = [];
-  filas.forEach((original, i) => {
+  filas.forEach(({ fila: filaNum, datos: original }, i) => {
     const datos: Record<string, unknown> = {};
-    for (const [h, destino] of Object.entries(mapeo)) if (destino) datos[destino] = original[h];
+    for (const [h, destino] of Object.entries(mapeo)) {
+      if (!destino) continue;
+      const valor = original[h];
+      if (vacio(datos[destino])) {
+        // primer valor visto para este destino (o el único no vacío hasta ahora): se guarda.
+        datos[destino] = valor;
+      } else if (!vacio(valor) && String(valor).trim() !== String(datos[destino]).trim()) {
+        // dos columnas distintas mapeadas al mismo destino, ambas con datos y diferentes:
+        // no pisar la primera — la segunda se guarda aparte bajo su propio encabezado.
+        datos[normalizarEncabezado(h)] = valor;
+      }
+      // valor vacío y el destino ya tiene algo: no se toca (el llenado gana sobre el blanco).
+    }
     const lead = separarLead(datos);
     const errs = validarLead(lead, campos);
-    if (errs.length) errores.push({ fila: i + 2, errores: errs, original });
-    else validas.push({ fila: i + 2, lead });
+    const fila = filaNum ?? i + 2;
+    if (errs.length) errores.push({ fila, errores: errs, original });
+    else validas.push({ fila, lead });
   });
   return { validas, errores };
 }

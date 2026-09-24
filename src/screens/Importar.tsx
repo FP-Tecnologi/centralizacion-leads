@@ -10,9 +10,9 @@ import Link from 'next/link';
 import { PageHead } from '../components/shell/PageHead';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { guardarFuente, listarFuentes, type Fuente, type Lead } from '../lib/leads/datos';
-import { construirFilas, normalizarEncabezado, slugify, sugerirMapeo, type Mapeo } from '../lib/leads/mapeo';
-import { exportarLeads, leerArchivo } from '../lib/leads/exportar';
+import { guardarFuente, listarFuentes, type Fuente } from '../lib/leads/datos';
+import { construirFilas, normalizarEncabezado, slugify, sugerirMapeo, type FilaEntrada, type Mapeo } from '../lib/leads/mapeo';
+import { exportarObjetos, leerArchivo } from '../lib/leads/exportar';
 import { NUCLEO, type ErrorCampo } from '../../supabase/functions/_shared/lead';
 
 const LABEL_NUCLEO: Record<string, string> = {
@@ -26,7 +26,7 @@ const MAX_FILAS = 50_000;
 const LOTE = 500;
 
 interface ImportacionHist { id: string; archivo: string; nuevas: number; actualizadas: number; errores: number; creado_en: string }
-interface ResultadoImport { nuevas: number; actualizadas: number; erroresServidor: { fila: number; motivo: string }[] }
+interface ResultadoImport { nuevas: number; actualizadas: number; erroresServidor: { fila: number; motivo: string }[]; parcial?: string }
 
 const PASOS = ['Archivo y fuente', 'Mapear columnas', 'Vista previa y confirmar'];
 
@@ -43,8 +43,9 @@ export function Importar() {
   const [nombreNueva, setNombreNueva] = useState('');
   const [archivo, setArchivo] = useState<File | null>(null);
   const [encabezados, setEncabezados] = useState<string[]>([]);
-  const [filasArchivo, setFilasArchivo] = useState<Record<string, unknown>[]>([]);
+  const [filasArchivo, setFilasArchivo] = useState<FilaEntrada[]>([]);
   const [errorArchivo, setErrorArchivo] = useState<string | null>(null);
+  const [errorFuente, setErrorFuente] = useState<string | null>(null);
   const [leyendo, setLeyendo] = useState(false);
 
   // Paso 2
@@ -63,10 +64,10 @@ export function Importar() {
   const fuente = useMemo(() => fuentes.find((f) => f.id === fuenteId), [fuentes, fuenteId]);
 
   useEffect(() => {
-    listarFuentes()
-      .then((fs) => setFuentes(fs.filter((f) => puedeEditar)))
-      .catch(() => setFuentes([]))
-      .finally(() => setCargandoFuentes(false));
+    // RLS de `fuentes` ya limita a lo que el usuario puede ver; si no puede editar nada,
+    // no hay fuente destino válida y ni vale la pena listar.
+    if (!puedeEditar) { setFuentes([]); setCargandoFuentes(false); return; }
+    listarFuentes().then(setFuentes).catch(() => setFuentes([])).finally(() => setCargandoFuentes(false));
   }, [puedeEditar]);
 
   const irA = (i: number) => { setPaso(i); setMaxPaso((m) => Math.max(m, i)); };
@@ -76,6 +77,14 @@ export function Importar() {
     setErrorArchivo(null);
     setEncabezados([]);
     setFilasArchivo([]);
+    // un archivo nuevo invalida cualquier mapeo/preview/resultado de uno anterior.
+    setMapeo({});
+    setConstruido(null);
+    setResultado(null);
+    setErrorImportar(null);
+    setErrorMapeo(null);
+    setMaxPaso(0);
+    setPaso(0);
     if (!file) return;
     setLeyendo(true);
     try {
@@ -108,7 +117,7 @@ export function Importar() {
       out.push({ value: c.key, label: c.label });
     }
     const nueva = normalizarEncabezado(encabezado);
-    if (nueva && !out.some((o) => o.value === nueva)) out.push({ value: nueva, label: `Campo nuevo: ${nueva}` });
+    if (nueva && !out.some((o) => o.value === nueva)) out.push({ value: nueva, label: `Campo nuevo: ${encabezado}` });
     return out;
   };
 
@@ -126,7 +135,10 @@ export function Importar() {
       }
       setGuardandoMapeo(true);
       try {
-        const campos = [...fuente.campos, ...nuevos.map((key) => ({ key, label: key, tipo: 'texto' as const, requerido: false }))];
+        // el label del campo nuevo es el encabezado ORIGINAL del archivo (no la clave
+        // normalizada) — así la columna se ve en la tabla/UI tal como la escribió el usuario.
+        const etiquetaOriginal = (destino: string) => Object.entries(mapeo).find(([, d]) => d === destino)?.[0] ?? destino;
+        const campos = [...fuente.campos, ...nuevos.map((key) => ({ key, label: etiquetaOriginal(key), tipo: 'texto' as const, requerido: false }))];
         const actualizada = await guardarFuente({ id: fuente.id, campos });
         setFuentes((fs) => fs.map((f) => (f.id === actualizada.id ? actualizada : f)));
       } catch {
@@ -158,30 +170,49 @@ export function Importar() {
     setImportando(true);
     setErrorImportar(null);
     setProgreso(0);
+    const validas = construido.validas;
+    const totalLotes = Math.max(1, Math.ceil(validas.length / LOTE));
     let nuevas = 0;
     let actualizadas = 0;
     const erroresServidor: { fila: number; motivo: string }[] = [];
+    let loteActual = 0;
     try {
-      const validas = construido.validas;
       for (let i = 0; i < validas.length; i += LOTE) {
+        loteActual += 1;
         const lote = validas.slice(i, i + LOTE);
-        const { data, error } = await supabase.rpc('importar_leads', {
-          p_fuente: fuenteId,
-          p_filas: lote.map((v) => v.lead as unknown as Record<string, unknown>),
-          p_archivo: archivo.name,
-        });
-        if (error) throw error;
-        nuevas += data.nuevas;
-        actualizadas += data.actualizadas;
-        for (const e of data.errores as { fila: number; motivo: string }[]) {
-          erroresServidor.push({ fila: lote[e.fila - 1].fila, motivo: e.motivo });
+        // controller: p_archivo lleva "(lote k/n)" cuando hay más de un lote, para que el
+        // historial de importaciones sea honesto sobre que fue un envío partido.
+        const nombreArchivo = totalLotes > 1 ? `${archivo.name} (lote ${loteActual}/${totalLotes})` : archivo.name;
+        try {
+          const { data, error } = await supabase.rpc('importar_leads', {
+            p_fuente: fuenteId,
+            p_filas: lote.map((v) => v.lead as unknown as Record<string, unknown>),
+            p_archivo: nombreArchivo,
+          });
+          if (error) throw error;
+          nuevas += data.nuevas;
+          actualizadas += data.actualizadas;
+          for (const e of data.errores as { fila: number; motivo: string }[]) {
+            erroresServidor.push({ fila: lote[e.fila - 1].fila, motivo: e.motivo });
+          }
+          setProgreso(Math.min(i + LOTE, validas.length));
+        } catch (e) {
+          // un lote falla (red, permiso, etc.): lo ya guardado en lotes anteriores queda
+          // en la base — se muestra como resultado parcial en vez de perderlo en un error genérico.
+          const msg = e instanceof Error ? e.message : 'error desconocido';
+          const desde = lote[0].fila;
+          const hasta = lote[lote.length - 1].fila;
+          setErrorImportar(
+            `Se guardaron ${nuevas + actualizadas} filas (${nuevas} nuevas, ${actualizadas} actualizadas) antes del error; `
+            + `falló el lote ${loteActual} (filas ${desde}–${hasta}): ${msg}`,
+          );
+          setResultado({ nuevas, actualizadas, erroresServidor, parcial: 'si' });
+          cargarHistorial(fuenteId);
+          return;
         }
-        setProgreso(Math.min(i + LOTE, validas.length));
       }
       setResultado({ nuevas, actualizadas, erroresServidor });
       cargarHistorial(fuenteId);
-    } catch (e) {
-      setErrorImportar(e instanceof Error ? e.message : 'No se pudo importar. Intenta de nuevo.');
     } finally {
       setImportando(false);
     }
@@ -192,9 +223,11 @@ export function Importar() {
     const filas = construido.errores.map((e) => ({
       ...e.original,
       errores: e.errores.map((er) => `${er.campo}: ${MOTIVO[er.motivo]}`).join('; '),
-    })) as unknown as Lead[];
-    const columnas = [...encabezados, 'errores'].map((k) => ({ key: k, label: k }));
-    await exportarLeads(filas, columnas, 'csv', 'errores-importacion');
+    }));
+    // directo con exportarObjetos (no exportarLeads/valorColumna): las filas del archivo
+    // pueden traer columnas literalmente llamadas "nombre" o "fuente", que valorColumna
+    // trata como casos especiales de Lead y las perdería.
+    await exportarObjetos(filas, [...encabezados, 'errores'], 'csv', 'errores-importacion');
   };
 
   if (!puedeEditar) {
@@ -205,6 +238,8 @@ export function Importar() {
       </>
     );
   }
+
+  const totalConError = (construido?.errores.length ?? 0) + (resultado?.erroresServidor.length ?? 0);
 
   return (
     <>
@@ -269,15 +304,16 @@ export function Importar() {
                     onChange={(e) => setNombreNueva(e.target.value)}
                   />
                 )}
+                {errorFuente && <p role="alert" style={{ color: 'var(--ax-danger-500)' }}>{errorFuente}</p>}
                 {esAdmin && (
                   <button
                     type="button"
                     className="ax-btn ax-btn--link ax-btn--sm"
                     style={{ marginTop: 'var(--ax-space-2)' }}
                     onClick={async () => {
-                      if (!crearNueva) { setCrearNueva(true); return; }
+                      if (!crearNueva) { setCrearNueva(true); setErrorFuente(null); return; }
                       if (!nombreNueva.trim()) return;
-                      setErrorArchivo(null);
+                      setErrorFuente(null);
                       try {
                         const nueva = await guardarFuente({
                           nombre: nombreNueva.trim(), slug: slugify(nombreNueva), tipo: 'importacion', campos: [],
@@ -287,7 +323,7 @@ export function Importar() {
                         setCrearNueva(false);
                         setNombreNueva('');
                       } catch {
-                        setErrorArchivo('No se pudo crear la fuente. Verifica que el nombre no esté repetido.');
+                        setErrorFuente('No se pudo crear la fuente. Verifica que el nombre no esté repetido.');
                       }
                     }}
                   >
@@ -324,7 +360,7 @@ export function Importar() {
                     {encabezados.map((h) => (
                       <tr key={h} className="ax-table__row">
                         <td className="ax-table__td">{h}</td>
-                        <td className="ax-table__td">{String(filasArchivo[0]?.[h] ?? '')}</td>
+                        <td className="ax-table__td">{String(filasArchivo[0]?.datos[h] ?? '')}</td>
                         <td className="ax-table__td">
                           <select
                             className="ax-select ax-select--sm"
@@ -395,8 +431,6 @@ export function Importar() {
                     </div>
                   )}
 
-                  {errorImportar && <p role="alert" style={{ color: 'var(--ax-danger-500)' }}>{errorImportar}</p>}
-
                   <div className="ax-cluster" style={{ gap: 'var(--ax-space-2)' }}>
                     <button type="button" className="ax-btn ax-btn--secondary" onClick={() => setPaso(1)} disabled={importando}>Atrás</button>
                     <button type="button" className="ax-btn ax-btn--primary" disabled={!construido.validas.length || importando} onClick={importar}>
@@ -406,11 +440,13 @@ export function Importar() {
                 </>
               )}
 
+              {errorImportar && <p role="alert" style={{ color: 'var(--ax-danger-500)' }}>{errorImportar}</p>}
+
               {resultado && (
                 <>
                   <p className="ax-num" style={{ fontSize: 'var(--ax-text-lg)' }}>
                     {resultado.nuevas} nuevas, {resultado.actualizadas} actualizadas
-                    {resultado.erroresServidor.length > 0 && <>, {resultado.erroresServidor.length} con error</>}
+                    {totalConError > 0 && <>, {totalConError} con error</>}
                   </p>
                   {!!resultado.erroresServidor.length && (
                     <ul style={{ margin: 0, paddingInlineStart: 'var(--ax-space-5)', fontSize: 'var(--ax-text-sm)' }}>
