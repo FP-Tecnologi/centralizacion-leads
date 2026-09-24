@@ -1,7 +1,1 @@
-export default function Page() {
-  return (
-    <div className="ax-card">
-      <div className="ax-card__body">Sistema de Leads</div>
-    </div>
-  );
-}
+export { Dashboard as default } from '../../src/screens/Dashboard';
