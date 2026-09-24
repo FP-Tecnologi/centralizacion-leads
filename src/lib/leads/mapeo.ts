@@ -83,7 +83,20 @@ export function inferirTipo(valores: string[]): 'texto' | 'fecha' | 'numero' {
   return 'texto';
 }
 
-export function construirFilas(filas: FilaEntrada[], mapeo: Mapeo, campos: CampoFormulario[]) {
+// leads_completo (SQL) solo sabe castear ISO (yyyy-mm-dd); un valor DD/MM/YYYY guardado
+// tal cual en `extra` saldría null ahí. Se normaliza acá, antes de mandar, igual que
+// `normalizar()` ya hace para el núcleo `fecha_nacimiento` en supabase/functions/_shared/lead.ts.
+function normalizarFechaExtra(v: string): string {
+  const m = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(v.trim());
+  return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : v;
+}
+
+export function construirFilas(
+  filas: FilaEntrada[],
+  mapeo: Mapeo,
+  campos: CampoFormulario[],
+  tiposExtra: Record<string, 'texto' | 'fecha' | 'numero'> = {},
+) {
   const validas: { fila: number; lead: LeadEntrada }[] = [];
   const errores: { fila: number; errores: ErrorCampo[]; original: Record<string, unknown> }[] = [];
   filas.forEach(({ fila: filaNum, datos: original }, i) => {
@@ -101,6 +114,9 @@ export function construirFilas(filas: FilaEntrada[], mapeo: Mapeo, campos: Campo
         datos[claveExtraLibre(normalizarEncabezado(h), datos)] = valor;
       }
       // valor vacío y el destino ya tiene algo: no se toca (el llenado gana sobre el blanco).
+    }
+    for (const [destino, tipo] of Object.entries(tiposExtra)) {
+      if (tipo === 'fecha' && !vacio(datos[destino])) datos[destino] = normalizarFechaExtra(String(datos[destino]));
     }
     const lead = separarLead(datos);
     const errs = validarLead(lead, campos);

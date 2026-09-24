@@ -5,7 +5,8 @@
  * edición por fila. Markup portado de vireo/crm/Leads.tsx + tables/DataTables.tsx
  * (clases ax-table*, ax-badge--*, ax-checkbox, paginación, estado vacío).
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'next/navigation';
 import {
   cambiarEstado,
@@ -28,6 +29,7 @@ import { ColumnasMenu } from './ColumnasMenu';
 import { FiltrosPanel } from './FiltrosPanel';
 import { EditarLeadModal } from './EditarLeadModal';
 import { ConfirmarEliminarModal } from './ConfirmarEliminarModal';
+import { EXPORTAR_SLOT_ID } from './ExportarSlot';
 import { Dropdown } from '../ui/Dropdown';
 
 interface Columna { key: string; label: string; render?: (l: Lead) => string; orden?: string; grupo?: string }
@@ -83,7 +85,13 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
   const searchParams = useSearchParams();
   const claveColumnas = `leads:columnas:${fuenteFija?.slug ?? 'todas'}`;
   const [columnasExtra, setColumnasExtra] = useState<ColumnaExtra[]>([]);
-  useEffect(() => { listarColumnasExtra().then(setColumnasExtra).catch(() => setColumnasExtra([])); }, []);
+  // las columnas extra globales cargan async: hasta que no terminen, `columnas` todavía no
+  // las incluye — restaurar/filtrar contra localStorage antes de eso las perdería para
+  // siempre (ver el efecto de restauración más abajo).
+  const [extrasListas, setExtrasListas] = useState(false);
+  useEffect(() => {
+    listarColumnasExtra().then(setColumnasExtra).catch(() => setColumnasExtra([])).finally(() => setExtrasListas(true));
+  }, []);
 
   const columnas = useMemo<Columna[]>(() => {
     // con fuenteFija: primero sus campos declarados (en el orden del formulario), luego el
@@ -129,21 +137,35 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
   const selectAllRef = useRef<HTMLInputElement>(null);
   const cargaId = useRef(0);
 
-  // columnas visibles: restaurar de localStorage al montar / cambiar de fuente.
-  // El guardado (efecto siguiente) espera a `columnasListas` para no pisar el
-  // valor persistido con el estado inicial todavía no restaurado (carrera
-  // agravada por el doble-invoke de efectos de React StrictMode en dev).
+  // columnas visibles: restaurar de localStorage al montar / cambiar de fuente — solo
+  // cuando `extrasListas`, para que `columnas` ya incluya las extra globales (si se
+  // restaura antes, el filtro contra `columnas` las descarta y el guardado de abajo
+  // las borra de localStorage para siempre). Se guardan dos listas: la de columnas
+  // visibles, y la de TODAS las claves ya vistas alguna vez — cualquier clave de
+  // `columnas` que no esté en esa segunda lista es nueva (p.ej. una columna extra que
+  // se registró después de la última visita) y se agrega como visible por defecto,
+  // sin pisar lo que el usuario ya haya ocultado a propósito.
+  // El guardado (efecto siguiente) espera a `columnasListas` para no pisar el valor
+  // persistido con el estado inicial todavía no restaurado (carrera agravada por el
+  // doble-invoke de efectos de React StrictMode en dev).
   useEffect(() => {
+    if (!extrasListas) return;
+    const claveVistas = `${claveColumnas}:vistas`;
+    const clavesActuales = columnas.map((c) => c.key);
     try {
-      const raw = window.localStorage.getItem(claveColumnas);
-      const guardadas = raw ? (JSON.parse(raw) as string[]).filter((k) => columnas.some((c) => c.key === k)) : [];
-      setVisibles(guardadas.length ? guardadas : columnas.map((c) => c.key));
+      const rawVisibles = window.localStorage.getItem(claveColumnas);
+      const rawVistas = window.localStorage.getItem(claveVistas);
+      const vistasPrevias = new Set<string>(rawVistas ? (JSON.parse(rawVistas) as string[]) : []);
+      const nuevas = clavesActuales.filter((k) => !vistasPrevias.has(k));
+      const guardadas = rawVisibles ? (JSON.parse(rawVisibles) as string[]).filter((k) => clavesActuales.includes(k)) : null;
+      setVisibles(guardadas ? [...new Set([...guardadas, ...nuevas])] : clavesActuales);
+      window.localStorage.setItem(claveVistas, JSON.stringify([...new Set([...vistasPrevias, ...clavesActuales])]));
     } catch {
-      setVisibles(columnas.map((c) => c.key));
+      setVisibles(clavesActuales);
     }
     setColumnasListas(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [claveColumnas]);
+  }, [claveColumnas, extrasListas]);
 
   useEffect(() => {
     if (!columnasListas || !visibles.length) return;
@@ -286,6 +308,35 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
   const columnasVisibles = columnas.filter((c) => visibles.includes(c.key));
   const contadorFiltros = contarFiltrosActivos(filtro, !!fuenteFija);
 
+  // Exportar vive en la cabecera de página, junto a Importar (pedido del usuario) — se
+  // porta ahí vía ExportarSlot para no duplicar el estado (filtro/orden/columnas
+  // visibles/selección) fuera de LeadsTable, que sigue siendo la única fuente de verdad.
+  // useLayoutEffect (no useEffect) para encontrar el slot antes del primer paint: si no,
+  // el botón parpadearía un frame en la posición vieja (toolbar) antes de saltar al header.
+  const [exportarSlotEl, setExportarSlotEl] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => { setExportarSlotEl(document.getElementById(EXPORTAR_SLOT_ID)); }, []);
+
+  const exportarMenu = (
+    <Dropdown
+      className="ax-dropdown-wrap"
+      panelClassName="ax-dropdown"
+      panelAriaLabel="Exportar leads"
+      trigger={({ triggerProps }) => (
+        <button type="button" className="ax-btn ax-btn--secondary ax-btn--sm" disabled={exportando} {...triggerProps}>
+          <svg className="ax-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2" /><path d="M7 11l5 5l5 -5" /><path d="M12 4l0 12" /></svg>
+          <span className="ax-btn__label">{exportando ? 'Preparando…' : 'Exportar'}</span>
+        </button>
+      )}
+    >
+      {({ close }) => (
+        <>
+          <button type="button" className="ax-menu__item" onClick={() => { close(); exportar('xlsx'); }}>Excel (.xlsx)</button>
+          <button type="button" className="ax-menu__item" onClick={() => { close(); exportar('csv'); }}>CSV (.csv)</button>
+        </>
+      )}
+    </Dropdown>
+  );
+
   return (
     <>
       <div className="ax-dash-grid">
@@ -313,24 +364,7 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
                 <span className="ax-btn__label">Filtros{contadorFiltros > 0 ? ` (${contadorFiltros})` : ''}</span>
               </button>
               <ColumnasMenu columnas={columnas.map(({ key, label, grupo }) => ({ key, label, grupo }))} visibles={visibles} onCambiar={setVisibles} />
-              <Dropdown
-                className="ax-dropdown-wrap"
-                panelClassName="ax-dropdown"
-                panelAriaLabel="Exportar leads"
-                trigger={({ triggerProps }) => (
-                  <button type="button" className="ax-btn ax-btn--secondary ax-btn--sm" disabled={exportando} {...triggerProps}>
-                    <svg className="ax-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2" /><path d="M7 11l5 5l5 -5" /><path d="M12 4l0 12" /></svg>
-                    <span className="ax-btn__label">{exportando ? 'Preparando…' : 'Exportar'}</span>
-                  </button>
-                )}
-              >
-                {({ close }) => (
-                  <>
-                    <button type="button" className="ax-menu__item" onClick={() => { close(); exportar('xlsx'); }}>Excel (.xlsx)</button>
-                    <button type="button" className="ax-menu__item" onClick={() => { close(); exportar('csv'); }}>CSV (.csv)</button>
-                  </>
-                )}
-              </Dropdown>
+              {!exportarSlotEl && exportarMenu}
             </div>
           </div>
 
@@ -499,6 +533,8 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
           )}
         </section>
       </div>
+
+      {exportarSlotEl && createPortal(exportarMenu, exportarSlotEl)}
 
       <FiltrosPanel
         abierto={panelAbierto}

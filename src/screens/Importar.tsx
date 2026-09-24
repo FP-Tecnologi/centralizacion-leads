@@ -148,35 +148,43 @@ export function Importar() {
   const confirmarMapeo = async () => {
     if (!fuente) return;
     setErrorMapeo(null);
-    // destinos no-núcleo que aún no son ni un campo declarado de la fuente ni una columna
-    // extra global ya registrada: se registran ahora (admin o editor, ya no solo admin —
-    // son columnas globales, no tocan la definición de formulario de la fuente, que sigue
-    // siendo solo-admin vía RLS de `fuentes`). label = encabezado original del archivo,
-    // tipo = inferido de los valores de esa columna.
-    const declarados = new Set<string>([...NUCLEO, ...fuente.campos.map((c) => c.key), ...columnasExtra.map((c) => c.key)]);
+    // Todo destino no-núcleo mapeado (sea "campo nuevo" o una columna extra global ya
+    // registrada) se manda a registrarColumnas — no solo los brand-new: el RPC ya protege
+    // un label/tipo puesto a mano, así que reenviar uno existente es inofensivo, y así
+    // "Ciudad" de un archivo nuevo también refresca/confirma la columna `ciudad` de
+    // siempre. label = encabezado original del archivo, tipo = inferido de sus valores.
+    // Ya no requiere admin (antes bloqueaba a editores): es una columna global, no toca
+    // la definición de formulario de la fuente, que sigue siendo solo-admin vía RLS.
     const primerEncabezadoPorDestino = new Map<string, string>();
     for (const [h, destino] of Object.entries(mapeo)) {
-      if (destino && !primerEncabezadoPorDestino.has(destino)) primerEncabezadoPorDestino.set(destino, h);
+      if (destino && !(NUCLEO as readonly string[]).includes(destino) && !primerEncabezadoPorDestino.has(destino)) {
+        primerEncabezadoPorDestino.set(destino, h);
+      }
     }
-    const nuevos = [...primerEncabezadoPorDestino.entries()].filter(([destino]) => !declarados.has(destino));
-    if (nuevos.length) {
+    const cols: ColumnaExtra[] = [...primerEncabezadoPorDestino.entries()].map(([key, encabezado]) => ({
+      key,
+      label: encabezado,
+      tipo: inferirTipo(filasArchivo.map((f) => String(f.datos[encabezado] ?? ''))),
+    }));
+    if (cols.length) {
       setGuardandoMapeo(true);
       try {
-        const cols: ColumnaExtra[] = nuevos.map(([key, encabezado]) => ({
-          key,
-          label: encabezado,
-          tipo: inferirTipo(filasArchivo.map((f) => String(f.datos[encabezado] ?? ''))),
-        }));
         await registrarColumnas(cols);
-        setColumnasExtra((prev) => [...prev, ...cols].sort((a, b) => a.label.localeCompare(b.label)));
+        setColumnasExtra((prev) => {
+          const previas = new Set(prev.map((c) => c.key));
+          return [...prev, ...cols.filter((c) => !previas.has(c.key))].sort((a, b) => a.label.localeCompare(b.label));
+        });
       } catch {
-        setErrorMapeo('No se pudieron registrar las columnas nuevas. Intenta de nuevo.');
+        setErrorMapeo('No se pudieron registrar las columnas. Intenta de nuevo.');
         setGuardandoMapeo(false);
         return;
       }
       setGuardandoMapeo(false);
     }
-    setConstruido(construirFilas(filasArchivo, mapeo, fuente.campos));
+    // fechas extra en DD/MM/YYYY -> ISO antes de enviar: leads_completo (SQL) solo castea
+    // ISO, y un DD/MM/YYYY guardado tal cual saldría null ahí para siempre.
+    const tiposExtra = Object.fromEntries(cols.map((c) => [c.key, c.tipo]));
+    setConstruido(construirFilas(filasArchivo, mapeo, fuente.campos, tiposExtra));
     setResultado(null);
     setErrorImportar(null);
     irA(2);

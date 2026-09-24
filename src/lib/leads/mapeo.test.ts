@@ -76,6 +76,36 @@ describe('construirFilas', () => {
     expect(r.validas[0].lead.telefono).toBe('987654321');
     expect(r.validas[0].lead.extra.telefono_2).toBe('111222333');
   });
+
+  it('normaliza a ISO una columna extra tipada como fecha en formato DD/MM/YYYY antes de enviar (leads_completo solo castea ISO)', () => {
+    const r = construirFilas(
+      [{ datos: { A: 'Ana', T: '987654321', B: '15/01/2024' } }],
+      { A: 'nombres', T: 'telefono', B: 'visita' },
+      [],
+      { visita: 'fecha' },
+    );
+    expect(r.validas[0].lead.extra.visita).toBe('2024-01-15');
+  });
+
+  it('deja una fecha extra ya ISO tal cual', () => {
+    const r = construirFilas(
+      [{ datos: { A: 'Ana', T: '987654321', B: '2024-01-15' } }],
+      { A: 'nombres', T: 'telefono', B: 'visita' },
+      [],
+      { visita: 'fecha' },
+    );
+    expect(r.validas[0].lead.extra.visita).toBe('2024-01-15');
+  });
+
+  it('no toca una columna extra que no está tipada como fecha', () => {
+    const r = construirFilas(
+      [{ datos: { A: 'Ana', T: '987654321', B: '15/01/2024' } }],
+      { A: 'nombres', T: 'telefono', B: 'notas' },
+      [],
+      { notas: 'texto' },
+    );
+    expect(r.validas[0].lead.extra.notas).toBe('15/01/2024');
+  });
 });
 
 describe('inferirTipo', () => {
