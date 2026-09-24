@@ -11,10 +11,12 @@
  */
 import type { ReactNode } from 'react';
 import { Layout } from '../../src/components/shell/Layout';
+import { RequireAuth } from '../../src/components/auth/RequireAuth';
 
-/* ponytail: RequireAuth (apps/web) importa el AuthContext viejo que no
-   copiamos — pass-through temporal. Task 8 escribe el RequireAuth real
-   (Supabase + aal2) y lo vuelve a envolver aquí. */
 export default function ShellLayout({ children }: { children: ReactNode }) {
-  return <Layout>{children}</Layout>;
+  return (
+    <RequireAuth>
+      <Layout>{children}</Layout>
+    </RequireAuth>
+  );
 }

@@ -29,6 +29,7 @@ import { Dropdown } from '../ui/Dropdown';
 import { Avatar } from '../ui/Avatar';
 import { useCustomizer } from '../../context/CustomizerContext';
 import { useOverflowShed } from '../../hooks/useOverflowShed';
+import { useAuth } from '../../context/AuthContext';
 
 const ICON = {
   cog: (
@@ -51,10 +52,7 @@ export function HeaderUtils({ onCustomizer }: { onCustomizer: () => void }) {
   const c = useCustomizer();
   const [full, setFull] = useState(false);
   const shed = useOverflowShed();
-  // ponytail: placeholder hasta Task 8 (AuthContext real de Supabase).
-  const perfil = null as { rol: string } | null;
-  const user = null as { nombre?: string; email?: string; avatarUrl?: string } | null;
-  const logout = () => {};
+  const { perfil, user, logout } = useAuth();
   const roleLabel = perfil?.rol ?? '';
 
   useEffect(() => {
@@ -108,16 +106,16 @@ export function HeaderUtils({ onCustomizer }: { onCustomizer: () => void }) {
         trigger={({ open, triggerProps }) => (
           <button type="button" className="ax-profile__trigger has-meta" aria-label="Account menu" {...triggerProps} aria-expanded={open}>
             <span className="ax-profile__meta" style={{ textAlign: 'right' }}>
-              <b>{user?.nombre || user?.email || 'Cuenta'}</b>
+              <b>{perfil?.nombre || user?.email || 'Cuenta'}</b>
               {roleLabel && <small>{roleLabel}</small>}
             </span>
-            <Avatar className="ax-avatar ax-profile__avatar" nombre={user?.nombre} email={user?.email} avatarUrl={user?.avatarUrl} size={32} />
+            <Avatar className="ax-avatar ax-profile__avatar" nombre={perfil?.nombre} email={user?.email} size={32} />
           </button>
         )}
       >
         <div className="ax-profile__card">
-          <Avatar className="ax-avatar" nombre={user?.nombre} email={user?.email} avatarUrl={user?.avatarUrl} size={40} />
-          <span className="ax-profile__card-meta"><b>{user?.nombre || 'Cuenta'}</b><small>{user?.email || ''}</small></span>
+          <Avatar className="ax-avatar" nombre={perfil?.nombre} email={user?.email} size={40} />
+          <span className="ax-profile__card-meta"><b>{perfil?.nombre || 'Cuenta'}</b><small>{user?.email || ''}</small></span>
         </div>
         <Link className="ax-dropdown__item" role="menuitem" href="/cuenta">Mi cuenta</Link>
         <div className="ax-dropdown__divider" role="separator"></div>

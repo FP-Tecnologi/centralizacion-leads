@@ -13,6 +13,7 @@ import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { useAuth } from '../../context/AuthContext';
 import {
   manifest,
   sections,
@@ -163,8 +164,7 @@ function Group({ node, level, activeSlug, roleName }: GroupProps) {
 export function Sidebar({ drawerOpen = false, onNavToggle }: { drawerOpen?: boolean; onNavToggle: () => void }) {
   const activeSlug = slugFromPath(usePathname() || '/');
   const rootRef = useRef<HTMLElement>(null);
-  // ponytail: placeholder hasta Task 8 (AuthContext real de Supabase).
-  const perfil = null as { rol: string } | null;
+  const { perfil } = useAuth();
   const roleName = perfil?.rol ?? null;
   useFocusTrap(rootRef, drawerOpen);
 

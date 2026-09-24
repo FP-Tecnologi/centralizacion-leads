@@ -20,8 +20,8 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import { CustomizerProvider } from '../src/context/CustomizerContext';
+import { AuthProvider } from '../src/context/AuthContext';
 import '../src/styles/app.css';
-/* ponytail: AuthProvider quitado temporalmente — Task 8 agrega el real (Supabase). */
 
 /* The anti-flash IIFE — verbatim from the HTML reference. MUST run before the
    stylesheet and before React. Kept as a string so Next inlines it untouched. */
@@ -149,7 +149,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         />
       </head>
       <body>
-        <CustomizerProvider>{children}</CustomizerProvider>
+        <AuthProvider>
+          <CustomizerProvider>{children}</CustomizerProvider>
+        </AuthProvider>
       </body>
     </html>
   );
