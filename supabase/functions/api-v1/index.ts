@@ -39,7 +39,8 @@ Deno.serve(async (req) => {
   }
 
   if (ruta === '/leads') {
-    const limite = Math.min(Math.max(Number(url.searchParams.get('limite') ?? 100), 1), 500);
+    const nLimite = Math.trunc(Number(url.searchParams.get('limite') ?? 100));
+    const limite = Number.isFinite(nLimite) ? Math.min(Math.max(nLimite, 1), 500) : 100;
     const fuente = url.searchParams.get('fuente');
     if (fuente && slugsPermitidos && !slugsPermitidos.includes(fuente)) return json({ error: 'fuera_de_alcance' }, 403);
 

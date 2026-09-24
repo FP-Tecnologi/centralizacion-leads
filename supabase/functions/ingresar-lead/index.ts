@@ -4,7 +4,12 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { separarLead, validarLead, type CampoFormulario } from '../_shared/lead.ts';
 import { CORS, json, limitar, sha256 } from '../_shared/http.ts';
 
-const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+// Disponible en el runtime de Supabase Edge Functions; no está en los tipos de Deno estándar.
+declare const EdgeRuntime: { waitUntil(p: Promise<unknown>): void } | undefined;
+
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: CORS });
@@ -39,13 +44,16 @@ Deno.serve(async (req) => {
 
   const correo = fuente.correo_gracias as { activo?: boolean; asunto?: string; plantilla?: string } | null;
   if (resultado === 'nueva' && correo?.activo && lead.email) {
-    // No bloquea la respuesta al visitante si el correo falla.
-    fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/send-thank-you`, {
+    // No bloquea la respuesta al visitante si el correo falla. La plantilla y
+    // el asunto los resuelve send-thank-you leyendo `fuentes` por id: nunca
+    // se le manda HTML/asunto arbitrario desde aquí.
+    const envio = fetch(`${SUPABASE_URL}/functions/v1/send-thank-you`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ type: 'INSERT', table: 'leads', record: { nombres: lead.nombres, email: lead.email },
-        asunto: correo.asunto, html: correo.plantilla }),
-    }).catch((e) => console.error('send-thank-you', e));
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${SERVICE_ROLE_KEY}` },
+      body: JSON.stringify({ fuente_id: fuente.id, nombres: lead.nombres, email: lead.email }),
+    }).then((r) => { if (!r.ok) console.error('send-thank-you', r.status); })
+      .catch((e) => console.error('send-thank-you', e));
+    if (typeof EdgeRuntime !== 'undefined') EdgeRuntime.waitUntil(envio);
   }
   return json({ ok: true, resultado });
 });

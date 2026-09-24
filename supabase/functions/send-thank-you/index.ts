@@ -8,32 +8,40 @@
 // Resend evita ese problema por completo (solo necesita el dominio
 // verificado vía SPF/DKIM, no login a una cuenta de correo).
 //
+// Solo se llama internamente desde `ingresar-lead` (bearer = service role
+// key). No acepta asunto/html del llamador: siempre lee la plantilla desde
+// `fuentes.correo_gracias` por id, para que nadie pueda usar esta función
+// como relay de correo arbitrario.
+//
 // Deploy:
 //   supabase functions deploy send-thank-you --no-verify-jwt
 //   supabase secrets set RESEND_API_KEY=... EMAIL_FROM="FP Tecnologi & System <dev@fptecnologi.com>"
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "FP Tecnologi & System <dev@fptecnologi.com>";
 const SITE_URL = Deno.env.get("SITE_URL") ?? "https://www.fptecnologi.com";
+const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 // Logos del evento (EXPOMINA, CIP) se sirven desde el sitio de registro, no
 // desde el sitio corporativo (SITE_URL).
 const ASSET_BASE = "https://registro.fptecnologi.com";
 
-interface LeadRecord {
-  nombres?: string;
+const db = createClient(Deno.env.get("SUPABASE_URL")!, SERVICE_ROLE_KEY);
+
+interface EnviarPayload {
+  fuente_id?: string;
   email?: string;
+  nombres?: string;
 }
 
-interface DbWebhookPayload {
-  type: "INSERT" | "UPDATE" | "DELETE";
-  table: string;
-  record: LeadRecord;
-  asunto?: string;
-  html?: string;
+const ASUNTO_DEFECTO = "Gracias por registrarte — Semana de Ingeniería Geológica · FP Tecnologi & System";
+
+function escapeHtml(v: string): string {
+  return v.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 }
 
 function buildEmailHtml(nombre: string) {
-  const firstName = (nombre || "").trim().split(/\s+/)[0] || "";
+  const firstName = escapeHtml((nombre || "").trim().split(/\s+/)[0] || "");
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -123,22 +131,29 @@ async function sendMail(opts: { to: string; subject: string; html: string }) {
 
 Deno.serve(async (req: Request) => {
   try {
+    // Solo `ingresar-lead` (u otro caller interno) puede invocar esta función:
+    // exige el bearer de service role explícitamente. --no-verify-jwt sigue
+    // activo porque el anon key también es un JWT válido y no basta.
+    if (req.headers.get("authorization") !== `Bearer ${SERVICE_ROLE_KEY}`) {
+      return new Response(JSON.stringify({ error: "no_autorizado" }), { status: 401 });
+    }
     if (!RESEND_API_KEY) {
       return new Response(JSON.stringify({ error: "RESEND_API_KEY no configurado" }), { status: 500 });
     }
 
-    const payload = (await req.json()) as DbWebhookPayload;
-    const record = payload.record;
-
-    if (payload.type !== "INSERT" || !record?.email) {
-      return new Response(JSON.stringify({ skipped: true }), { status: 200 });
+    const payload = (await req.json()) as EnviarPayload;
+    if (!payload.email || !payload.fuente_id) {
+      return new Response(JSON.stringify({ error: "payload_invalido" }), { status: 400 });
     }
 
-    const firstName = (record.nombres ?? "").trim().split(/\s+/)[0] || "";
+    const { data: fuente } = await db.from("fuentes").select("correo_gracias").eq("id", payload.fuente_id).maybeSingle();
+    const correo = fuente?.correo_gracias as { asunto?: string; plantilla?: string } | null;
+
+    const firstName = escapeHtml((payload.nombres ?? "").trim().split(/\s+/)[0] || "");
     await sendMail({
-      to: record.email,
-      subject: payload.asunto ?? "Gracias por registrarte — Semana de Ingeniería Geológica · FP Tecnologi & System",
-      html: payload.html ? payload.html.replaceAll("{{nombre}}", firstName) : buildEmailHtml(record.nombres ?? ""),
+      to: payload.email,
+      subject: correo?.asunto ?? ASUNTO_DEFECTO,
+      html: correo?.plantilla ? correo.plantilla.replaceAll("{{nombre}}", firstName) : buildEmailHtml(payload.nombres ?? ""),
     });
 
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
