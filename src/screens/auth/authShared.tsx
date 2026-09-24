@@ -2,16 +2,21 @@
 /*
  * Sistema de Leads — shared auth helpers (non-route), portado de apps/web.
  *
- * El área de auth es un set de páginas STANDALONE (sin app shell). Cada
- * página es una pantalla full-viewport con: el loader de página, el glow
- * ambiental (ambos ya los pone el layout (bare)), el toggle de tema fijo
- * arriba a la derecha, y una marca de marca.
+ * El área de auth es un set de páginas STANDALONE (sin app shell): layout
+ * "cover" (split 52/48 — panel de marca + formulario), a diferencia del HUB
+ * que usa el layout "basic" centrado — así el login de Leads se distingue a
+ * simple vista del HUB. El loader de página y el glow ambiental los pone el
+ * layout (bare); el toggle de tema fijo arriba a la derecha y el panel de
+ * marca viven aquí.
  *
  * Sin login social (Task 8 no lo pide) — a diferencia de apps/web, aquí no
  * hay lib/api.ts ni flujo de Google.
  */
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import Link from 'next/link';
+
+export const SYSTEM_NAME = 'Sistema de Centralización de Leads';
+export const SYSTEM_SUBTITLE = 'FPTecnologi · Gestión unificada de leads de landings, importaciones y apps offline';
 
 const SUN = (
   <svg className="ax-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" width={22} height={22} aria-hidden="true"><path d="M8 12a4 4 0 1 0 8 0a4 4 0 1 0 -8 0" /><path d="M3 12h1m8 -9v1m8 8h1m-9 8v1m-6.4 -15.4l.7 .7m12.1 -.7l-.7 .7m0 11.4l.7 .7m-12.1 -.7l-.7 .7" /></svg>
@@ -51,30 +56,89 @@ export function OffappTools({ style }: { style?: CSSProperties }) {
   );
 }
 
-/** Centered brand lockup. */
-export function BrandCentered({ logoWidth = 190 }: { logoWidth?: number }) {
+/** Marca inline compacta (panel cover / cabecera de la tarjeta). */
+export function BrandInline({ logoWidth = 150 }: { logoWidth?: number }) {
   return (
-    <Link href="/" className="ax-center" aria-label="FPTecnologi home" style={{ textDecoration: 'none', justifyContent: 'center' }}>
+    <Link href="/" className="ax-cluster" aria-label="Sistema de Centralización de Leads" style={{ gap: 'var(--ax-space-3)', textDecoration: 'none' }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/logo-fptecnologi.svg" alt="FPTecnologi" width={logoWidth} style={{ height: 'auto' }} />
     </Link>
   );
 }
 
+const COVER_STYLE = `
+@media (min-width: 992px) {
+  .ax-auth-cover { grid-template-columns: 52% 48% !important; }
+  .ax-auth-cover__panel { display: flex !important; }
+}
+`;
+
+/** Panel de marca del layout cover: nombre del sistema + subtítulo, sin datos de demo. */
+function AuthCoverPanel() {
+  return (
+    <aside className="ax-auth-cover__panel" aria-hidden="true"
+      style={{ position: 'relative', overflow: 'hidden', display: 'none', flexDirection: 'column', justifyContent: 'space-between', padding: 'var(--ax-space-12)', background: 'linear-gradient(150deg, var(--ax-accent-wash) 0%, var(--ax-surface-subtle) 65%, var(--ax-canvas) 100%)', borderInlineEnd: '1px solid var(--ax-border)' }}>
+      <span aria-hidden="true" style={{ position: 'absolute', insetBlockStart: -120, insetInlineEnd: -100, inlineSize: 380, blockSize: 380, borderRadius: '50%', background: 'radial-gradient(circle, rgba(var(--ax-accent-rgb),.28), transparent 64%)', filter: 'blur(8px)' }} />
+      <span aria-hidden="true" style={{ position: 'absolute', insetBlockEnd: -160, insetInlineStart: -120, inlineSize: 420, blockSize: 420, borderRadius: '50%', background: 'radial-gradient(circle, rgba(var(--ax-accent-rgb),.16), transparent 66%)', filter: 'blur(10px)' }} />
+
+      <div className="ax-cluster" style={{ gap: 'var(--ax-space-3)', position: 'relative' }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo-fptecnologi-icon.svg" alt="" width={40} height={40} style={{ borderRadius: 'var(--ax-radius-md)' }} />
+        <span style={{ fontFamily: 'var(--ax-font-display)', fontWeight: 'var(--ax-weight-semibold)', fontSize: 'var(--ax-text-lg)', color: 'var(--ax-text-strong)' }}>FPTecnologi</span>
+      </div>
+
+      <div style={{ position: 'relative', maxInlineSize: '32ch' }}>
+        <p style={{ margin: 0, fontFamily: 'var(--ax-font-display)', fontSize: 'var(--ax-text-2xl)', lineHeight: 1.3, fontWeight: 'var(--ax-weight-semibold)', color: 'var(--ax-text-strong)', letterSpacing: '-.015em' }}>{SYSTEM_NAME}</p>
+        <p style={{ margin: 'var(--ax-space-3) 0 0', fontSize: 'var(--ax-text-sm)', lineHeight: 1.5, color: 'var(--ax-text-muted)' }}>{SYSTEM_SUBTITLE}</p>
+      </div>
+
+      <span style={{ position: 'relative', fontSize: 'var(--ax-text-xs)', color: 'var(--ax-text-subtle)' }}>Acceso protegido con verificación en dos pasos.</span>
+    </aside>
+  );
+}
+
 /**
- * Standalone page wrapper: sets <body class="ax-standalone"> while mounted.
- * El loader de página + el glow ambiental los pone el layout (bare), no se
+ * Shell del layout cover: split 52/48 (panel de marca + panel de formulario).
+ * Cada pantalla de auth le pasa su tarjeta/formulario como children.
+ */
+export function AuthCoverShell({ children }: { children: ReactNode }) {
+  return (
+    <AuthStandalone cover>
+      <style>{COVER_STYLE}</style>
+      <div className="ax-auth-cover" style={{ position: 'relative', zIndex: 1, minBlockSize: '100dvh', display: 'grid', gridTemplateColumns: '1fr' }}>
+        <AuthCoverPanel />
+        <main className="ax-center" id="ax-main" style={{ position: 'relative', padding: 'var(--ax-space-8) var(--ax-space-6)' }}>
+          <OffappTools style={{ position: 'absolute', insetBlockStart: 'var(--ax-space-5)', insetInlineEnd: 'var(--ax-space-5)' }} />
+          <div style={{ inlineSize: '100%', maxInlineSize: 440, display: 'flex', flexDirection: 'column', gap: 'var(--ax-space-6)' }}>
+            <BrandInline />
+            {children}
+          </div>
+        </main>
+      </div>
+    </AuthStandalone>
+  );
+}
+
+/**
+ * Standalone page wrapper: sets <body class="ax-standalone"> while mounted
+ * (layout centrado) — `cover` usa margin:0 en su lugar (igual que apps/web).
+ * El loader de página y el glow ambiental los pone el layout (bare), no se
  * repiten aquí.
  */
-export function AuthStandalone({ children }: { children: ReactNode }) {
+export function AuthStandalone({ cover = false, children }: { cover?: boolean; children: ReactNode }) {
   useEffect(() => {
     const b = document.body;
     const had = b.className;
-    b.classList.add('ax-standalone');
+    if (cover) {
+      b.style.margin = '0';
+    } else {
+      b.classList.add('ax-standalone');
+    }
     return () => {
       b.className = had;
+      b.style.margin = '';
     };
-  }, []);
+  }, [cover]);
   return <>{children}</>;
 }
 

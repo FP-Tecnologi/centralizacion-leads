@@ -116,8 +116,8 @@ export const metadata: Metadata = {
   // `default` covers routes that supply no title of their own; `template` wraps
   // the bare page name each route exports via metadataForSlug().
   title: {
-    default: 'FPTecnologi · Leads',
-    template: '%s · Leads',
+    default: 'Sistema de Centralización de Leads',
+    template: '%s · Centralización de Leads',
   },
   description:
     'Sistema de Leads de FPTecnologi: landings, importación, dashboard y conexiones.',

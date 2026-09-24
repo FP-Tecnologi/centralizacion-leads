@@ -18,6 +18,7 @@ interface AuthValue {
   aal2: boolean;
   loading: boolean;
   login(email: string, password: string): Promise<'totp' | 'activar'>;
+  tieneTotp(): Promise<boolean>;
   verificarTotp(code: string): Promise<void>;
   iniciarActivacion(): Promise<{ factorId: string; qr: string; secreto: string }>;
   confirmarActivacion(factorId: string, code: string): Promise<void>;
@@ -70,6 +71,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return (data?.totp.some((f) => f.status === 'verified') ? 'totp' : 'activar') as 'totp' | 'activar';
   }, []);
 
+  // ¿La cuenta ya tiene un factor TOTP verificado? Usado por TwoStepTotp para
+  // no quedarse atascada en "No hay 2FA activo" cuando el usuario llega ahí
+  // sin haber terminado nunca la activación (p.ej. recargó a mitad del enroll).
+  const tieneTotp = useCallback(async () => {
+    const { data } = await supabase.auth.mfa.listFactors();
+    return !!data?.totp.some((f) => f.status === 'verified');
+  }, []);
+
   const verificarTotp = useCallback(async (code: string) => {
     const { data } = await supabase.auth.mfa.listFactors();
     const factor = data?.totp.find((f) => f.status === 'verified');
@@ -106,10 +115,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [router]);
 
   const value = useMemo<AuthValue>(() => ({
-    user, perfil, aal2, loading, login, verificarTotp, iniciarActivacion, confirmarActivacion, crearClave, logout,
+    user, perfil, aal2, loading, login, tieneTotp, verificarTotp, iniciarActivacion, confirmarActivacion, crearClave, logout,
     puedeEditar: perfil?.rol === 'admin' || perfil?.rol === 'editor',
     esAdmin: perfil?.rol === 'admin',
-  }), [user, perfil, aal2, loading, login, verificarTotp, iniciarActivacion, confirmarActivacion, crearClave, logout]);
+  }), [user, perfil, aal2, loading, login, tieneTotp, verificarTotp, iniciarActivacion, confirmarActivacion, crearClave, logout]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
