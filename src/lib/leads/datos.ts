@@ -17,6 +17,7 @@ export interface Lead {
   actualizado_en: string; fuentes?: { nombre: string; slug: string };
 }
 export interface Orden { campo: string; asc: boolean }
+export interface ColumnaExtra { key: string; label: string; tipo: 'texto' | 'fecha' | 'numero' }
 
 const SELECT = '*, fuentes(nombre, slug)';
 
@@ -59,6 +60,18 @@ export async function eliminarLeads(ids: string[]): Promise<void> {
   // RLS deja pasar el DELETE sin error para no-admin, pero filtra las filas
   // (0 borradas): hay que distinguirlo de un borrado real.
   if (!data?.length) throw new Error('sin_permiso');
+}
+
+export async function listarColumnasExtra(): Promise<ColumnaExtra[]> {
+  const { data, error } = await supabase.from('columnas_extra').select('key,label,tipo').order('label');
+  if (error) throw error;
+  return data as ColumnaExtra[];
+}
+
+export async function registrarColumnas(cols: ColumnaExtra[]): Promise<void> {
+  if (!cols.length) return;
+  const { error } = await supabase.rpc('registrar_columnas', { p: cols });
+  if (error) throw error;
 }
 
 export async function listarFuentes(tipo?: Fuente['tipo']): Promise<Fuente[]> {

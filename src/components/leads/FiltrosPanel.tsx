@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { supabase } from '../../lib/supabase';
-import { ESTADOS, type Fuente } from '../../lib/leads/datos';
+import { ESTADOS, type ColumnaExtra, type Fuente } from '../../lib/leads/datos';
 import { FILTRO_VACIO, OPERADORES, type Condicion, type FiltroLeads, type Operador } from '../../lib/leads/filtros';
 import type { CampoFormulario, TipoCampo } from '../../../supabase/functions/_shared/lead';
 
@@ -26,7 +26,7 @@ const NUCLEO_INFO: Record<string, { label: string; tipo: TipoCampo }> = {
 interface CampoInfo { key: string; label: string; tipo: TipoCampo; opciones?: string[] }
 interface FilaGuardada { id: string; nombre: string; definicion: FiltroLeads }
 
-function camposDisponibles(fuenteFija: Fuente | undefined, fuentes: Fuente[]): CampoInfo[] {
+function camposDisponibles(fuenteFija: Fuente | undefined, fuentes: Fuente[], columnasExtra: ColumnaExtra[]): CampoInfo[] {
   const out: CampoInfo[] = Object.entries(NUCLEO_INFO).map(([key, v]) => ({ key, ...v }));
   const extra: CampoFormulario[] = fuenteFija
     ? fuenteFija.campos
@@ -36,6 +36,11 @@ function camposDisponibles(fuenteFija: Fuente | undefined, fuentes: Fuente[]): C
     if (vistos.has(c.key)) continue;
     vistos.add(c.key);
     out.push({ key: c.key, label: c.label, tipo: c.tipo, opciones: c.opciones });
+  }
+  for (const c of columnasExtra) {
+    if (vistos.has(c.key)) continue;
+    vistos.add(c.key);
+    out.push({ key: c.key, label: c.label, tipo: c.tipo });
   }
   return out;
 }
@@ -47,6 +52,7 @@ export function FiltrosPanel({
   onAplicar,
   fuentes,
   fuenteFija,
+  columnasExtra,
 }: {
   abierto: boolean;
   onCerrar: () => void;
@@ -54,6 +60,7 @@ export function FiltrosPanel({
   onAplicar: (f: FiltroLeads) => void;
   fuentes: Fuente[];
   fuenteFija?: Fuente;
+  columnasExtra: ColumnaExtra[];
 }) {
   const [borrador, setBorrador] = useState<FiltroLeads>(filtro);
   const [misFiltros, setMisFiltros] = useState<FilaGuardada[]>([]);
@@ -69,7 +76,7 @@ export function FiltrosPanel({
       .then(({ data }) => setMisFiltros((data ?? []) as FilaGuardada[]));
   }, [abierto]);
 
-  const campos = camposDisponibles(fuenteFija, fuentes);
+  const campos = camposDisponibles(fuenteFija, fuentes, columnasExtra);
   const campoInfo = (key: string) => campos.find((c) => c.key === key);
 
   const toggleFuente = (id: string) => {

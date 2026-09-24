@@ -10,9 +10,11 @@ import { useSearchParams } from 'next/navigation';
 import {
   cambiarEstado,
   ESTADOS,
+  listarColumnasExtra,
   listarFuentes,
   listarLeads,
   todosLosLeads,
+  type ColumnaExtra,
   type Fuente,
   type Lead,
   type Orden,
@@ -28,7 +30,7 @@ import { EditarLeadModal } from './EditarLeadModal';
 import { ConfirmarEliminarModal } from './ConfirmarEliminarModal';
 import { Dropdown } from '../ui/Dropdown';
 
-interface Columna { key: string; label: string; render?: (l: Lead) => string; orden?: string }
+interface Columna { key: string; label: string; render?: (l: Lead) => string; orden?: string; grupo?: string }
 
 const BASE: Columna[] = [
   { key: 'nombre', label: 'Nombre', render: (l: Lead) => `${l.nombres ?? ''} ${l.apellido ?? ''}`.trim() || '—', orden: 'nombres' },
@@ -80,13 +82,25 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
   const { puedeEditar, esAdmin } = useAuth();
   const searchParams = useSearchParams();
   const claveColumnas = `leads:columnas:${fuenteFija?.slug ?? 'todas'}`;
+  const [columnasExtra, setColumnasExtra] = useState<ColumnaExtra[]>([]);
+  useEffect(() => { listarColumnasExtra().then(setColumnasExtra).catch(() => setColumnasExtra([])); }, []);
 
   const columnas = useMemo<Columna[]>(() => {
-    const extra = (fuenteFija?.campos ?? [])
-      .filter((c) => !esNucleo(c.key))
-      .map((c) => ({ key: c.key, label: c.label, render: (l: Lead) => l.extra?.[c.key] ?? '—' }));
+    // con fuenteFija: primero sus campos declarados (en el orden del formulario), luego el
+    // resto de columnas extra globales que no sean ya uno de esos campos. Sin fuenteFija:
+    // todas las columnas extra globales. `orden: c.key` — columna() ya mapea a extra->>key.
+    const deFuente = (fuenteFija?.campos ?? []).filter((c) => !esNucleo(c.key));
+    const clavesFuente = new Set(deFuente.map((c) => c.key));
+    const globales = columnasExtra.filter((c) => !clavesFuente.has(c.key));
+    const extra = [...deFuente, ...globales].map((c) => ({
+      key: c.key,
+      label: c.label,
+      orden: c.key,
+      grupo: 'Campos adicionales',
+      render: (l: Lead) => l.extra?.[c.key] ?? '—',
+    }));
     return [...BASE, ...extra];
-  }, [fuenteFija]);
+  }, [fuenteFija, columnasExtra]);
 
   const [filtro, setFiltro] = useState<FiltroLeads>(() => {
     if (fuenteFija) return { ...FILTRO_VACIO, fuentes: [fuenteFija.id] };
@@ -298,7 +312,7 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
                 <svg className="ax-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 6l16 0" /><path d="M10 12l4 0" /><path d="M8 18l8 0" /></svg>
                 <span className="ax-btn__label">Filtros{contadorFiltros > 0 ? ` (${contadorFiltros})` : ''}</span>
               </button>
-              <ColumnasMenu columnas={columnas.map(({ key, label }) => ({ key, label }))} visibles={visibles} onCambiar={setVisibles} />
+              <ColumnasMenu columnas={columnas.map(({ key, label, grupo }) => ({ key, label, grupo }))} visibles={visibles} onCambiar={setVisibles} />
               <Dropdown
                 className="ax-dropdown-wrap"
                 panelClassName="ax-dropdown"
@@ -493,12 +507,14 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
         onAplicar={aplicarDesdePanel}
         fuentes={fuentes}
         fuenteFija={fuenteFija}
+        columnasExtra={columnasExtra}
       />
 
       {editando && (
         <EditarLeadModal
           lead={editando}
           fuente={fuentes.find((f) => f.id === editando.fuente_id)}
+          columnasExtra={columnasExtra}
           puedeEditar={puedeEditar}
           onCerrar={() => setEditando(null)}
           onGuardado={() => { setEditando(null); cargar(); }}

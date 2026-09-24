@@ -6,7 +6,7 @@
  */
 import { useMemo, useRef, useState } from 'react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
-import { actualizarLead, ESTADOS, type Fuente, type Lead } from '../../lib/leads/datos';
+import { actualizarLead, ESTADOS, type ColumnaExtra, type Fuente, type Lead } from '../../lib/leads/datos';
 import { NUCLEO, separarLead, validarLead, type ErrorCampo } from '../../../supabase/functions/_shared/lead';
 
 const LABELS: Record<string, string> = {
@@ -20,12 +20,14 @@ const MOTIVO: Record<ErrorCampo['motivo'], string> = {
 export function EditarLeadModal({
   lead,
   fuente,
+  columnasExtra,
   puedeEditar,
   onCerrar,
   onGuardado,
 }: {
   lead: Lead;
   fuente?: Fuente;
+  columnasExtra: ColumnaExtra[];
   puedeEditar: boolean;
   onCerrar: () => void;
   onGuardado: () => void;
@@ -44,12 +46,13 @@ export function EditarLeadModal({
   const [guardando, setGuardando] = useState(false);
   const [errorGuardado, setErrorGuardado] = useState<string | null>(null);
 
-  const campoExtra = (key: string) => fuente?.campos.find((c) => c.key === key);
+  const campoExtra = (key: string) => fuente?.campos.find((c) => c.key === key) ?? columnasExtra.find((c) => c.key === key);
   const extraKeys = useMemo(() => {
     const declaradas = (fuente?.campos ?? []).map((c) => c.key);
-    const sueltas = Object.keys(lead.extra ?? {}).filter((k) => !declaradas.includes(k));
-    return [...declaradas, ...sueltas];
-  }, [fuente, lead.extra]);
+    const globales = columnasExtra.map((c) => c.key);
+    const sueltas = Object.keys(lead.extra ?? {}).filter((k) => !declaradas.includes(k) && !globales.includes(k));
+    return [...new Set([...declaradas, ...globales, ...sueltas])];
+  }, [fuente, columnasExtra, lead.extra]);
 
   const errorDe = (campo: string) => errores.find((e) => e.campo === campo);
   const setCampo = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));

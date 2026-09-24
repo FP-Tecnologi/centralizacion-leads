@@ -11,8 +11,8 @@ import { useSearchParams } from 'next/navigation';
 import { PageHead } from '../components/shell/PageHead';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { guardarFuente, listarFuentes, type Fuente } from '../lib/leads/datos';
-import { construirFilas, normalizarEncabezado, slugify, sugerirMapeo, type FilaEntrada, type Mapeo } from '../lib/leads/mapeo';
+import { guardarFuente, listarColumnasExtra, listarFuentes, registrarColumnas, type ColumnaExtra, type Fuente } from '../lib/leads/datos';
+import { construirFilas, inferirTipo, normalizarEncabezado, slugify, sugerirMapeo, type FilaEntrada, type Mapeo } from '../lib/leads/mapeo';
 import { exportarObjetos, leerArchivo } from '../lib/leads/exportar';
 import { NUCLEO, type ErrorCampo } from '../../supabase/functions/_shared/lead';
 
@@ -39,6 +39,7 @@ export function Importar() {
 
   // Paso 1
   const [fuentes, setFuentes] = useState<Fuente[]>([]);
+  const [columnasExtra, setColumnasExtra] = useState<ColumnaExtra[]>([]);
   const [cargandoFuentes, setCargandoFuentes] = useState(true);
   const [fuenteId, setFuenteId] = useState('');
   const [crearNueva, setCrearNueva] = useState(false);
@@ -70,6 +71,11 @@ export function Importar() {
     // no hay fuente destino válida y ni vale la pena listar.
     if (!puedeEditar) { setFuentes([]); setCargandoFuentes(false); return; }
     listarFuentes().then(setFuentes).catch(() => setFuentes([])).finally(() => setCargandoFuentes(false));
+  }, [puedeEditar]);
+
+  useEffect(() => {
+    if (!puedeEditar) { setColumnasExtra([]); return; }
+    listarColumnasExtra().then(setColumnasExtra).catch(() => setColumnasExtra([]));
   }, [puedeEditar]);
 
   // preselecciona la fuente cuando se llega desde "Importar" de una página de Registros.
@@ -117,48 +123,60 @@ export function Importar() {
     irA(1);
   };
 
-  // opciones del select de mapeo: — Ignorar —, NUCLEO, campos de la fuente, "Campo nuevo: <encabezado>"
+  // opciones del select de mapeo: — Ignorar —, NUCLEO, campos de la fuente, columnas extra
+  // globales ya registradas (por label, para que "Ciudad" de un archivo nuevo caiga sobre la
+  // misma columna `ciudad` de siempre), y "Campo nuevo: <encabezado>" si nada de eso calza.
   const opcionesMapeo = (encabezado: string) => {
     const out: { value: string; label: string }[] = [{ value: '', label: '— Ignorar —' }];
-    for (const k of NUCLEO) out.push({ value: k, label: LABEL_NUCLEO[k] ?? k });
+    const vistos = new Set<string>();
+    for (const k of NUCLEO) { out.push({ value: k, label: LABEL_NUCLEO[k] ?? k }); vistos.add(k); }
     for (const c of fuente?.campos ?? []) {
-      if ((NUCLEO as readonly string[]).includes(c.key)) continue;
+      if (vistos.has(c.key)) continue;
+      vistos.add(c.key);
+      out.push({ value: c.key, label: c.label });
+    }
+    for (const c of columnasExtra) {
+      if (vistos.has(c.key)) continue;
+      vistos.add(c.key);
       out.push({ value: c.key, label: c.label });
     }
     const nueva = normalizarEncabezado(encabezado);
-    if (nueva && !out.some((o) => o.value === nueva)) out.push({ value: nueva, label: `Campo nuevo: ${encabezado}` });
+    if (nueva && !vistos.has(nueva)) out.push({ value: nueva, label: `Campo nuevo: ${encabezado}` });
     return out;
   };
 
   const confirmarMapeo = async () => {
     if (!fuente) return;
     setErrorMapeo(null);
-    // campos nuevos: destinos mapeados que no son núcleo ni ya están declarados en la fuente
-    const declarados = new Set(fuente.campos.map((c) => c.key));
-    const nucleoSet = new Set<string>(NUCLEO);
-    const nuevos = [...new Set(Object.values(mapeo).filter((v): v is string => !!v && !nucleoSet.has(v) && !declarados.has(v)))];
+    // destinos no-núcleo que aún no son ni un campo declarado de la fuente ni una columna
+    // extra global ya registrada: se registran ahora (admin o editor, ya no solo admin —
+    // son columnas globales, no tocan la definición de formulario de la fuente, que sigue
+    // siendo solo-admin vía RLS de `fuentes`). label = encabezado original del archivo,
+    // tipo = inferido de los valores de esa columna.
+    const declarados = new Set<string>([...NUCLEO, ...fuente.campos.map((c) => c.key), ...columnasExtra.map((c) => c.key)]);
+    const primerEncabezadoPorDestino = new Map<string, string>();
+    for (const [h, destino] of Object.entries(mapeo)) {
+      if (destino && !primerEncabezadoPorDestino.has(destino)) primerEncabezadoPorDestino.set(destino, h);
+    }
+    const nuevos = [...primerEncabezadoPorDestino.entries()].filter(([destino]) => !declarados.has(destino));
     if (nuevos.length) {
-      if (!esAdmin) {
-        setErrorMapeo('Hay columnas mapeadas a campos nuevos; solo un administrador puede crearlos. Elige "— Ignorar —" o un campo existente.');
-        return;
-      }
       setGuardandoMapeo(true);
       try {
-        // el label del campo nuevo es el encabezado ORIGINAL del archivo (no la clave
-        // normalizada) — así la columna se ve en la tabla/UI tal como la escribió el usuario.
-        const etiquetaOriginal = (destino: string) => Object.entries(mapeo).find(([, d]) => d === destino)?.[0] ?? destino;
-        const campos = [...fuente.campos, ...nuevos.map((key) => ({ key, label: etiquetaOriginal(key), tipo: 'texto' as const, requerido: false }))];
-        const actualizada = await guardarFuente({ id: fuente.id, campos });
-        setFuentes((fs) => fs.map((f) => (f.id === actualizada.id ? actualizada : f)));
+        const cols: ColumnaExtra[] = nuevos.map(([key, encabezado]) => ({
+          key,
+          label: encabezado,
+          tipo: inferirTipo(filasArchivo.map((f) => String(f.datos[encabezado] ?? ''))),
+        }));
+        await registrarColumnas(cols);
+        setColumnasExtra((prev) => [...prev, ...cols].sort((a, b) => a.label.localeCompare(b.label)));
       } catch {
-        setErrorMapeo('No se pudieron guardar los campos nuevos. Intenta de nuevo.');
+        setErrorMapeo('No se pudieron registrar las columnas nuevas. Intenta de nuevo.');
         setGuardandoMapeo(false);
         return;
       }
       setGuardandoMapeo(false);
     }
-    const campos = fuentes.find((f) => f.id === fuenteId)?.campos ?? fuente.campos;
-    setConstruido(construirFilas(filasArchivo, mapeo, campos));
+    setConstruido(construirFilas(filasArchivo, mapeo, fuente.campos));
     setResultado(null);
     setErrorImportar(null);
     irA(2);
@@ -389,7 +407,7 @@ export function Importar() {
               <div className="ax-cluster" style={{ gap: 'var(--ax-space-2)' }}>
                 <button type="button" className="ax-btn ax-btn--secondary" onClick={() => setPaso(0)}>Atrás</button>
                 <button type="button" className="ax-btn ax-btn--primary" disabled={guardandoMapeo} onClick={confirmarMapeo}>
-                  {guardandoMapeo ? 'Guardando campos…' : 'Continuar'}
+                  {guardandoMapeo ? 'Registrando columnas…' : 'Continuar'}
                 </button>
               </div>
             </div>

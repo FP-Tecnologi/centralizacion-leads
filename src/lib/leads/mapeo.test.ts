@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { construirFilas, normalizarEncabezado, sugerirMapeo } from './mapeo';
+import { construirFilas, inferirTipo, normalizarEncabezado, sugerirMapeo } from './mapeo';
 import type { CampoFormulario } from '../../../supabase/functions/_shared/lead';
 
 const campos: CampoFormulario[] = [{ key: 'ciudad', label: 'Ciudad', tipo: 'texto', requerido: false }];
@@ -75,5 +75,43 @@ describe('construirFilas', () => {
     );
     expect(r.validas[0].lead.telefono).toBe('987654321');
     expect(r.validas[0].lead.extra.telefono_2).toBe('111222333');
+  });
+});
+
+describe('inferirTipo', () => {
+  it('detecta fecha ISO', () => {
+    expect(inferirTipo(['2024-01-15', '2024-02-20'])).toBe('fecha');
+  });
+
+  it('detecta fecha DD/MM/YYYY', () => {
+    expect(inferirTipo(['15/01/2024', '20-02-2024'])).toBe('fecha');
+  });
+
+  it('detecta numero', () => {
+    expect(inferirTipo(['1000', '2500.50', '-30'])).toBe('numero');
+  });
+
+  it('ignora valores vacios al decidir', () => {
+    expect(inferirTipo(['1000', '', '  ', '2500'])).toBe('numero');
+  });
+
+  it('no confunde numeros con ceros a la izquierda con "numero" (código postal, etc)', () => {
+    expect(inferirTipo(['0123', '0456'])).toBe('texto');
+  });
+
+  it('no confunde IDs largos (DNI/telefono/RUC de 8+ dígitos) con "numero"', () => {
+    expect(inferirTipo(['12345678', '87654321'])).toBe('texto');
+  });
+
+  it('texto por defecto', () => {
+    expect(inferirTipo(['Lima', 'Arequipa'])).toBe('texto');
+  });
+
+  it('mezcla de tipos cae a texto', () => {
+    expect(inferirTipo(['1000', 'Lima'])).toBe('texto');
+  });
+
+  it('todo vacio cae a texto', () => {
+    expect(inferirTipo(['', '  '])).toBe('texto');
   });
 });

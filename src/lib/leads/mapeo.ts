@@ -64,6 +64,25 @@ function claveExtraLibre(base: string, datos: Record<string, unknown>): string {
   return candidata;
 }
 
+const ISO_FECHA = /^\d{4}-\d{2}-\d{2}$/;
+const DMY_FECHA = /^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/;
+const NUMERO = /^-?\d+(\.\d+)?$/;
+
+// Documento (DNI/RUC/teléfono) suele venir como texto numérico: no debe volverse 'numero'
+// (perdería ceros a la izquierda y no tiene sentido sumarlo/ordenarlo como cantidad).
+function pareceDocumento(v: string): boolean {
+  const entero = v.replace('-', '').split('.')[0];
+  return (entero.length > 1 && entero[0] === '0') || entero.length >= 8;
+}
+
+export function inferirTipo(valores: string[]): 'texto' | 'fecha' | 'numero' {
+  const vistos = valores.map((v) => v.trim()).filter((v) => v !== '');
+  if (!vistos.length) return 'texto';
+  if (vistos.every((v) => ISO_FECHA.test(v) || DMY_FECHA.test(v))) return 'fecha';
+  if (vistos.every((v) => NUMERO.test(v) && !pareceDocumento(v))) return 'numero';
+  return 'texto';
+}
+
 export function construirFilas(filas: FilaEntrada[], mapeo: Mapeo, campos: CampoFormulario[]) {
   const validas: { fila: number; lead: LeadEntrada }[] = [];
   const errores: { fila: number; errores: ErrorCampo[]; original: Record<string, unknown> }[] = [];
