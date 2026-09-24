@@ -1,8 +1,13 @@
 'use client';
 /*
  * Sistema de Leads — Crear contraseña.
- * Llega desde el enlace de invitación de Supabase (la sesión ya está
- * iniciada al abrir esta pantalla). Solo pide la contraseña dos veces.
+ * Llega desde el enlace de invitación de Supabase, o desde el enlace de
+ * "¿Olvidaste tu contraseña?" (evento PASSWORD_RECOVERY) — en ambos casos
+ * la sesión ya está iniciada al abrir esta pantalla. Solo pide la
+ * contraseña dos veces.
+ * Tras guardarla: si la cuenta YA tiene un factor TOTP verificado (caso
+ * recovery de alguien que ya había activado 2FA) va a verificarlo; si no
+ * (invitación nueva) va a activarlo.
  */
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -13,7 +18,7 @@ const MIN_LEN = 10;
 
 export function CrearClave() {
   const router = useRouter();
-  const { crearClave } = useAuth();
+  const { crearClave, tieneTotp } = useAuth();
   const [pw, setPw] = useState('');
   const [confirm, setConfirm] = useState('');
   const [reveal, setReveal] = useState(false);
@@ -35,7 +40,8 @@ export function CrearClave() {
     setLoading(true);
     setError('');
     crearClave(pw)
-      .then(() => router.push('/auth/activar-2fa'))
+      .then(() => tieneTotp())
+      .then((yaTiene) => router.push(yaTiene ? '/auth/two-step-totp' : '/auth/activar-2fa'))
       .catch((err: unknown) => {
         setLoading(false);
         setError(err instanceof Error ? err.message : 'No se pudo guardar la contraseña. Intenta de nuevo.');

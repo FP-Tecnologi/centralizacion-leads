@@ -11,6 +11,7 @@
     { "id": "exportacion", "title": "Exportación y conexiones", "slug": "exportacion", "icon": "apps", "parent": null, "section": "ADMINISTRACIÓN", "order": 1, "badge": null, "keywords": ["exportar", "api", "conectar", "hub"], "inMenu": true, "alias": null },
     { "id": "usuarios", "title": "Usuarios", "slug": "usuarios", "icon": "user", "parent": null, "section": "ADMINISTRACIÓN", "order": 2, "badge": null, "keywords": ["usuarios", "roles"], "inMenu": true, "alias": null, "roles": ["admin"] },
     { "id": "auth.sign-in", "title": "Ingresar", "slug": "auth/sign-in", "icon": "login", "parent": null, "section": null, "order": 99, "badge": null, "keywords": [], "inMenu": false, "alias": null },
+    { "id": "auth.recuperar", "title": "Recuperar contraseña", "slug": "auth/recuperar", "icon": "key", "parent": null, "section": null, "order": 99, "badge": null, "keywords": [], "inMenu": false, "alias": null },
     { "id": "auth.two-step-totp", "title": "Verificación en dos pasos", "slug": "auth/two-step-totp", "icon": "shield", "parent": null, "section": null, "order": 99, "badge": null, "keywords": [], "inMenu": false, "alias": null },
     { "id": "auth.activar-2fa", "title": "Activar 2FA", "slug": "auth/activar-2fa", "icon": "shield", "parent": null, "section": null, "order": 99, "badge": null, "keywords": [], "inMenu": false, "alias": null },
     { "id": "auth.crear-clave", "title": "Crear contraseña", "slug": "auth/crear-clave", "icon": "key", "parent": null, "section": null, "order": 99, "badge": null, "keywords": [], "inMenu": false, "alias": null }

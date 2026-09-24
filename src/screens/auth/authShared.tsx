@@ -66,33 +66,50 @@ export function BrandInline({ logoWidth = 150 }: { logoWidth?: number }) {
   );
 }
 
+/*
+ * Breakpoints del panel de marca (mobile-first):
+ * <768: banda compacta arriba (clamp 180–220px) con logo + título centrados,
+ *   formulario debajo a todo el ancho. 768–1199: panel lateral angosto
+ *   (~40%). >=1200: panel lateral ~50/50. El fondo (imagen + overlay) y el
+ *   texto van siempre, solo cambia el tamaño del panel.
+ */
 const COVER_STYLE = `
-@media (min-width: 992px) {
-  .ax-auth-cover { grid-template-columns: 52% 48% !important; }
-  .ax-auth-cover__panel { display: flex !important; }
+.ax-auth-cover__panel { min-block-size: clamp(180px, 26vw, 220px); }
+@media (min-width: 768px) {
+  .ax-auth-cover { grid-template-columns: 40% 60% !important; grid-template-rows: 1fr !important; }
+  .ax-auth-cover__panel { min-block-size: 100% !important; border-inline-end: 1px solid rgba(255,255,255,.08); }
+}
+@media (min-width: 1200px) {
+  .ax-auth-cover { grid-template-columns: 50% 50% !important; }
+}
+@media (min-width: 640px) {
+  .ax-auth-cover__main { padding: var(--ax-space-8) var(--ax-space-6) !important; }
 }
 `;
 
-/** Panel de marca del layout cover: nombre del sistema + subtítulo, sin datos de demo. */
+/**
+ * Panel de marca del layout cover: imagen de fondo (centralización de
+ * datos) con overlay navy + logo/título/subtítulo centrados horizontal y
+ * verticalmente. El fondo es puramente decorativo (CSS background, sin
+ * <img>/alt) — el texto NO lleva aria-hidden, es contenido real de la
+ * página (a diferencia de la versión anterior que ocultaba todo el panel).
+ */
 function AuthCoverPanel() {
   return (
-    <aside className="ax-auth-cover__panel" aria-hidden="true"
-      style={{ position: 'relative', overflow: 'hidden', display: 'none', flexDirection: 'column', justifyContent: 'space-between', padding: 'var(--ax-space-12)', background: 'linear-gradient(150deg, var(--ax-accent-wash) 0%, var(--ax-surface-subtle) 65%, var(--ax-canvas) 100%)', borderInlineEnd: '1px solid var(--ax-border)' }}>
-      <span aria-hidden="true" style={{ position: 'absolute', insetBlockStart: -120, insetInlineEnd: -100, inlineSize: 380, blockSize: 380, borderRadius: '50%', background: 'radial-gradient(circle, rgba(var(--ax-accent-rgb),.28), transparent 64%)', filter: 'blur(8px)' }} />
-      <span aria-hidden="true" style={{ position: 'absolute', insetBlockEnd: -160, insetInlineStart: -120, inlineSize: 420, blockSize: 420, borderRadius: '50%', background: 'radial-gradient(circle, rgba(var(--ax-accent-rgb),.16), transparent 66%)', filter: 'blur(10px)' }} />
-
-      <div className="ax-cluster" style={{ gap: 'var(--ax-space-3)', position: 'relative' }}>
+    <aside className="ax-auth-cover__panel"
+      style={{
+        position: 'relative', overflow: 'hidden', display: 'flex', flexDirection: 'column',
+        backgroundImage: 'linear-gradient(165deg, rgba(7,13,24,.78) 0%, rgba(7,13,24,.72) 100%), url(/images/auth/centralizacion.svg)',
+        backgroundSize: 'cover', backgroundPosition: 'center',
+      }}>
+      <div style={{ margin: 'auto', padding: 'var(--ax-space-6)', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 'var(--ax-space-4)', maxInlineSize: '32ch' }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo-fptecnologi-icon.svg" alt="" width={40} height={40} style={{ borderRadius: 'var(--ax-radius-md)' }} />
-        <span style={{ fontFamily: 'var(--ax-font-display)', fontWeight: 'var(--ax-weight-semibold)', fontSize: 'var(--ax-text-lg)', color: 'var(--ax-text-strong)' }}>FPTecnologi</span>
+        <img src="/logo-fptecnologi.svg" alt="FPTecnologi" width={150} style={{ height: 'auto', filter: 'brightness(0) invert(1)' }} />
+        <div>
+          <p style={{ margin: 0, fontFamily: 'var(--ax-font-display)', fontSize: 'var(--ax-text-2xl)', lineHeight: 1.3, fontWeight: 'var(--ax-weight-semibold)', color: '#fff', letterSpacing: '-.015em' }}>{SYSTEM_NAME}</p>
+          <p style={{ margin: 'var(--ax-space-3) 0 0', fontSize: 'var(--ax-text-sm)', lineHeight: 1.5, color: 'rgba(255,255,255,.78)' }}>{SYSTEM_SUBTITLE}</p>
+        </div>
       </div>
-
-      <div style={{ position: 'relative', maxInlineSize: '32ch' }}>
-        <p style={{ margin: 0, fontFamily: 'var(--ax-font-display)', fontSize: 'var(--ax-text-2xl)', lineHeight: 1.3, fontWeight: 'var(--ax-weight-semibold)', color: 'var(--ax-text-strong)', letterSpacing: '-.015em' }}>{SYSTEM_NAME}</p>
-        <p style={{ margin: 'var(--ax-space-3) 0 0', fontSize: 'var(--ax-text-sm)', lineHeight: 1.5, color: 'var(--ax-text-muted)' }}>{SYSTEM_SUBTITLE}</p>
-      </div>
-
-      <span style={{ position: 'relative', fontSize: 'var(--ax-text-xs)', color: 'var(--ax-text-subtle)' }}>Acceso protegido con verificación en dos pasos.</span>
     </aside>
   );
 }
@@ -105,12 +122,12 @@ export function AuthCoverShell({ children }: { children: ReactNode }) {
   return (
     <AuthStandalone cover>
       <style>{COVER_STYLE}</style>
-      <div className="ax-auth-cover" style={{ position: 'relative', zIndex: 1, minBlockSize: '100dvh', display: 'grid', gridTemplateColumns: '1fr' }}>
+      <div className="ax-auth-cover" style={{ position: 'relative', zIndex: 1, minBlockSize: '100dvh', display: 'grid', gridTemplateColumns: '1fr', gridTemplateRows: 'auto 1fr' }}>
         <AuthCoverPanel />
-        <main className="ax-center" id="ax-main" style={{ position: 'relative', padding: 'var(--ax-space-8) var(--ax-space-6)' }}>
+        <main className="ax-center ax-auth-cover__main" id="ax-main" style={{ position: 'relative', padding: 'var(--ax-space-6) var(--ax-space-4)' }}>
           <OffappTools style={{ position: 'absolute', insetBlockStart: 'var(--ax-space-5)', insetInlineEnd: 'var(--ax-space-5)' }} />
+          {/* La marca (logo + título) ya la lleva el panel, visible en todos los anchos — no se repite aquí. */}
           <div style={{ inlineSize: '100%', maxInlineSize: 440, display: 'flex', flexDirection: 'column', gap: 'var(--ax-space-6)' }}>
-            <BrandInline />
             {children}
           </div>
         </main>

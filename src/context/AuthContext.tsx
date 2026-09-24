@@ -9,6 +9,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { useRouter } from 'next/navigation';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { setRecordar } from '../lib/authStorage';
 
 export interface Perfil { user_id: string; nombre: string; rol: 'admin' | 'editor' | 'lector' }
 
@@ -17,7 +18,7 @@ interface AuthValue {
   perfil: Perfil | null;
   aal2: boolean;
   loading: boolean;
-  login(email: string, password: string): Promise<'totp' | 'activar'>;
+  login(email: string, password: string, recordar: boolean): Promise<'totp' | 'activar'>;
   tieneTotp(): Promise<boolean>;
   verificarTotp(code: string): Promise<void>;
   iniciarActivacion(): Promise<{ factorId: string; qr: string; secreto: string }>;
@@ -64,7 +65,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.subscription.unsubscribe();
   }, [refrescar]);
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string, recordar: boolean) => {
+    // El flag debe fijarse ANTES de signInWithPassword: el SDK persiste la
+    // sesión nueva usando el storage que el adaptador resuelva en ese momento.
+    setRecordar(window.localStorage, window.sessionStorage, recordar);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     const { data } = await supabase.auth.mfa.listFactors();

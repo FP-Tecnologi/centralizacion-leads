@@ -7,6 +7,7 @@
  */
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { AuthCoverShell, EYE, EYE_OFF } from './authShared';
 import { useAuth } from '../../context/AuthContext';
 
@@ -21,6 +22,7 @@ export function SignIn() {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [recordar, setRecordar] = useState(true);
   const [reveal, setReveal] = useState(false);
   const [emailErr, setEmailErr] = useState('');
   const [passErr, setPassErr] = useState('');
@@ -45,7 +47,7 @@ export function SignIn() {
     setError(false);
     if (!validate()) return;
     setLoading(true);
-    login(email.trim(), password)
+    login(email.trim(), password, recordar)
       .then((destino) => {
         setLoading(false);
         router.push(destino === 'totp' ? '/auth/two-step-totp' : '/auth/activar-2fa');
@@ -89,6 +91,14 @@ export function SignIn() {
             </button>
           </div>
           {passErr && <p id="si-pass-msg" className="ax-field__message ax-field__message--error">{passErr}</p>}
+        </div>
+
+        <div className="ax-cluster" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+          <label className="ax-cluster" style={{ gap: 'var(--ax-space-2)', alignItems: 'center', fontSize: 'var(--ax-text-sm)', color: 'var(--ax-text-muted)' }}>
+            <input type="checkbox" className="ax-checkbox" checked={recordar} onChange={(e) => setRecordar(e.target.checked)} />
+            Recordarme
+          </label>
+          <Link href="/auth/recuperar" className="ax-link" style={{ fontSize: 'var(--ax-text-sm)' }}>¿Olvidaste tu contraseña?</Link>
         </div>
 
         <button type="submit" className={`ax-btn ax-btn--primary ax-btn--lg ax-btn--block${loading ? ' is-loading' : ''}`} aria-busy={loading}>
