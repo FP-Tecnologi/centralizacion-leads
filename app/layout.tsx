@@ -25,6 +25,7 @@
  */
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
+import Script from 'next/script';
 import { CustomizerProvider } from '../src/context/CustomizerContext';
 import { AuthProvider } from '../src/context/AuthContext';
 import '../src/styles/app.css';
@@ -84,7 +85,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="es" suppressHydrationWarning data-ax-shell-style="detached">
       <head>
         {/* Anti-flash theme-restore — FIRST in <head>, before app.css. */}
-        <script dangerouslySetInnerHTML={{ __html: ANTI_FLASH }} />
+        {/* next/script beforeInteractive: runs before hydration without React's
+            "script tag inside component" warning a raw <script> triggers. */}
+        <Script id="ax-anti-flash" strategy="beforeInteractive">{ANTI_FLASH}</Script>
         {/* Google Fonts — Montserrat (sans + display) · JetBrains Mono (mono) */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
