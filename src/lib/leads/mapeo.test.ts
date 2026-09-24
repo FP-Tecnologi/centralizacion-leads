@@ -17,6 +17,10 @@ describe('sugerirMapeo', () => {
       'Razón Social': 'empresa', DNI: 'ruc', Ciudad: 'ciudad', Notas: 'notas',
     });
   });
+
+  it('reconoce "Fecha de nacimiento" como fecha_nacimiento (no a extra)', () => {
+    expect(sugerirMapeo(['Fecha de nacimiento'], [])).toEqual({ 'Fecha de nacimiento': 'fecha_nacimiento' });
+  });
 });
 
 describe('construirFilas', () => {

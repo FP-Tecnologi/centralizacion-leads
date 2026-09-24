@@ -15,13 +15,16 @@ export function slugify(h: string): string {
 
 const SINONIMOS: Record<string, string> = {
   nombre: 'nombres', nombres: 'nombres', first_name: 'nombres',
-  apellido: 'apellido', apellidos: 'apellido', last_name: 'apellido',
+  apellido: 'apellido', apellidos: 'apellido', last_name: 'apellido', apellido_paterno: 'apellido',
   email: 'email', e_mail: 'email', correo: 'email', correo_electronico: 'email', mail: 'email',
   telefono: 'telefono', celular: 'telefono', movil: 'telefono', whatsapp: 'telefono', phone: 'telefono',
+  telefono_celular: 'telefono', numero_de_celular: 'telefono', celular_1: 'telefono',
   empresa: 'empresa', razon_social: 'empresa', compania: 'empresa', company: 'empresa',
   ruc: 'ruc', dni: 'ruc', ruc_dni: 'ruc', documento: 'ruc',
   cargo: 'cargo', puesto: 'cargo', rubro: 'rubro', sector: 'rubro', industria: 'rubro',
   fecha_nacimiento: 'fecha_nacimiento', cumpleanos: 'fecha_nacimiento', nacimiento: 'fecha_nacimiento',
+  fecha_de_nacimiento: 'fecha_nacimiento', fecha_nac: 'fecha_nacimiento',
+  f_nacimiento: 'fecha_nacimiento', nacimiento_fecha: 'fecha_nacimiento',
 };
 
 export function sugerirMapeo(encabezados: string[], campos: CampoFormulario[]): Mapeo {
