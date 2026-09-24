@@ -28,6 +28,8 @@ interface DbWebhookPayload {
   type: "INSERT" | "UPDATE" | "DELETE";
   table: string;
   record: LeadRecord;
+  asunto?: string;
+  html?: string;
 }
 
 function buildEmailHtml(nombre: string) {
@@ -132,10 +134,11 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ skipped: true }), { status: 200 });
     }
 
+    const firstName = (record.nombres ?? "").trim().split(/\s+/)[0] || "";
     await sendMail({
       to: record.email,
-      subject: "Gracias por registrarte — Semana de Ingeniería Geológica · FP Tecnologi & System",
-      html: buildEmailHtml(record.nombres ?? ""),
+      subject: payload.asunto ?? "Gracias por registrarte — Semana de Ingeniería Geológica · FP Tecnologi & System",
+      html: payload.html ? payload.html.replaceAll("{{nombre}}", firstName) : buildEmailHtml(record.nombres ?? ""),
     });
 
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
