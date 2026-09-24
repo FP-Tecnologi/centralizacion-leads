@@ -41,11 +41,33 @@ describe('parsearBuffer — filas en blanco', () => {
 });
 
 describe('parsearBuffer — encabezado en blanco', () => {
-  it('asigna columna_<letra> por posición en vez de perder la columna', async () => {
+  it('encabezado explícitamente vacío: columna_<letra> por posición en vez de perder la columna', async () => {
     const buf = xlsxBuffer([['Nombre', '', 'Email'], ['Ana', 'nota', 'ana@x.com']]);
     const { encabezados, filas } = await parsearBuffer(buf, 'prueba.xlsx');
     expect(encabezados).toEqual(['Nombre', 'columna_B', 'Email']);
     expect(filas[0].datos.columna_B).toBe('nota');
+  });
+
+  it('sin celda en B1 (no solo vacía: inexistente): también columna_B', async () => {
+    const wb = XLSX.utils.book_new();
+    // aoa_to_sheet con `undefined` en B1 no crea la celda (a diferencia de ''), que es lo
+    // que SheetJS nombra "__EMPTY" en modo-objeto — acá no dependemos de esa convención.
+    const ws = XLSX.utils.aoa_to_sheet([['Nombre', undefined, 'Email'], ['Ana', 'nota', 'ana@x.com']]);
+    XLSX.utils.book_append_sheet(wb, ws, 'H');
+    const raw = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    const buf = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as ArrayBuffer;
+    const { encabezados, filas } = await parsearBuffer(buf, 'prueba.xlsx');
+    expect(encabezados).toEqual(['Nombre', 'columna_B', 'Email']);
+    expect(filas[0].datos.columna_B).toBe('nota');
+  });
+});
+
+describe('parsearBuffer — orden de encabezados', () => {
+  it('un encabezado numérico ("2024") no se adelanta al principio', async () => {
+    const buf = xlsxBuffer([['Nombre', '', '2024'], ['Ana', 'nota', 'x']]);
+    const { encabezados, filas } = await parsearBuffer(buf, 'prueba.xlsx');
+    expect(encabezados).toEqual(['Nombre', 'columna_B', '2024']);
+    expect(filas[0].datos['2024']).toBe('x');
   });
 });
 
@@ -54,6 +76,21 @@ describe('parsearBuffer — CSV UTF-8 sin BOM', () => {
     const buf = utf8Buffer('Nombre,Ciudad\nJosé,Lima\n');
     const { filas } = await parsearBuffer(buf, 'prueba.csv');
     expect(filas[0].datos.Nombre).toBe('José');
+  });
+});
+
+describe('parsearBuffer — CSV no reinterpreta fechas dd/mm como m/d', () => {
+  it('mantiene "03/04/2023" tal cual (no lo vuelve "2023-03-04")', async () => {
+    const buf = utf8Buffer('Nombre,Fecha\nAna,03/04/2023\n');
+    const { filas } = await parsearBuffer(buf, 'prueba.csv');
+    expect(filas[0].datos.Fecha).toBe('03/04/2023');
+  });
+
+  it('mantiene "15/03/2023" y ceros a la izquierda', async () => {
+    const buf = utf8Buffer('Fecha,Codigo\n15/03/2023,0123\n');
+    const { filas } = await parsearBuffer(buf, 'prueba.csv');
+    expect(filas[0].datos.Fecha).toBe('15/03/2023');
+    expect(filas[0].datos.Codigo).toBe('0123');
   });
 });
 

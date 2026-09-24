@@ -1,4 +1,4 @@
-import { separarLead, validarLead, type CampoFormulario, type ErrorCampo, type LeadEntrada } from '../../../supabase/functions/_shared/lead';
+import { esNucleo, separarLead, validarLead, type CampoFormulario, type ErrorCampo, type LeadEntrada } from '../../../supabase/functions/_shared/lead';
 
 export type Mapeo = Record<string, string | null>;
 
@@ -47,6 +47,20 @@ function vacio(v: unknown): boolean {
   return v === undefined || v === null || String(v).trim() === '';
 }
 
+// Clave libre para guardar el valor "sobrante" de una columna en conflicto: no puede ser
+// un campo núcleo (esos van directo a esa propiedad, no a extra) ni una clave ya usada en
+// `datos` — si no, pisaría al propio destino (p.ej. "Teléfono" normaliza a "telefono", que
+// es exactamente el destino que se quiere proteger) o a otro valor ya guardado.
+function claveExtraLibre(base: string, datos: Record<string, unknown>): string {
+  let candidata = base;
+  let n = 2;
+  while (esNucleo(candidata) || Object.prototype.hasOwnProperty.call(datos, candidata)) {
+    candidata = `${base}_${n}`;
+    n += 1;
+  }
+  return candidata;
+}
+
 export function construirFilas(filas: FilaEntrada[], mapeo: Mapeo, campos: CampoFormulario[]) {
   const validas: { fila: number; lead: LeadEntrada }[] = [];
   const errores: { fila: number; errores: ErrorCampo[]; original: Record<string, unknown> }[] = [];
@@ -60,8 +74,9 @@ export function construirFilas(filas: FilaEntrada[], mapeo: Mapeo, campos: Campo
         datos[destino] = valor;
       } else if (!vacio(valor) && String(valor).trim() !== String(datos[destino]).trim()) {
         // dos columnas distintas mapeadas al mismo destino, ambas con datos y diferentes:
-        // no pisar la primera — la segunda se guarda aparte bajo su propio encabezado.
-        datos[normalizarEncabezado(h)] = valor;
+        // no pisar la primera — la segunda se guarda aparte, en una clave que no choque ni
+        // con el destino ni con otra ya usada.
+        datos[claveExtraLibre(normalizarEncabezado(h), datos)] = valor;
       }
       // valor vacío y el destino ya tiene algo: no se toca (el llenado gana sobre el blanco).
     }

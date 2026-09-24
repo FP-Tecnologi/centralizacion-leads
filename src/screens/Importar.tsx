@@ -26,7 +26,7 @@ const MAX_FILAS = 50_000;
 const LOTE = 500;
 
 interface ImportacionHist { id: string; archivo: string; nuevas: number; actualizadas: number; errores: number; creado_en: string }
-interface ResultadoImport { nuevas: number; actualizadas: number; erroresServidor: { fila: number; motivo: string }[]; parcial?: string }
+interface ResultadoImport { nuevas: number; actualizadas: number; erroresServidor: { fila: number; motivo: string }[] }
 
 const PASOS = ['Archivo y fuente', 'Mapear columnas', 'Vista previa y confirmar'];
 
@@ -206,7 +206,7 @@ export function Importar() {
             `Se guardaron ${nuevas + actualizadas} filas (${nuevas} nuevas, ${actualizadas} actualizadas) antes del error; `
             + `falló el lote ${loteActual} (filas ${desde}–${hasta}): ${msg}`,
           );
-          setResultado({ nuevas, actualizadas, erroresServidor, parcial: 'si' });
+          setResultado({ nuevas, actualizadas, erroresServidor });
           cargarHistorial(fuenteId);
           return;
         }

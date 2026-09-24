@@ -59,4 +59,17 @@ describe('construirFilas', () => {
     expect(r.validas[0].lead.telefono).toBe('987654321');
     expect(r.validas[0].lead.extra.celular_2).toBe('999888777');
   });
+
+  it('Nombre/Celular/Teléfono con mapeo sugerido: "Teléfono" normaliza al propio destino "telefono" y no debe pisar a Celular', () => {
+    const encabezados = ['Nombre', 'Celular', 'Teléfono'];
+    const mapeo = sugerirMapeo(encabezados, []);
+    expect(mapeo).toEqual({ Nombre: 'nombres', Celular: 'telefono', Teléfono: 'telefono' });
+    const r = construirFilas(
+      [{ datos: { Nombre: 'Ana', Celular: '987654321', Teléfono: '111222333' } }],
+      mapeo,
+      [],
+    );
+    expect(r.validas[0].lead.telefono).toBe('987654321');
+    expect(r.validas[0].lead.extra.telefono_2).toBe('111222333');
+  });
 });
