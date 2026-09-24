@@ -1,5 +1,5 @@
 begin;
-select plan(14);
+select plan(18);
 
 -- usuarios de prueba
 insert into auth.users (id, email) values
@@ -31,6 +31,16 @@ select is((select count(*)::int from public.leads), 0, 'sin 2FA (aal1) no ve nad
 
 select pg_temp.como('00000000-0000-0000-0000-00000000000a', 'aal2');
 select is((select count(*)::int from public.leads where email in ('a@f1.com','b@f2.com')), 2, 'admin ve todas las fuentes');
+
+-- admin elimina un lead que tiene duplicados: el duplicado se borra en cascada
+-- (mismo principal, no toca a@f1.com/b@f2.com que usan los bloques siguientes).
+insert into public.leads (id, fuente_id, email) values
+  ('30000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'dup-principal@f1.com');
+insert into public.leads (fuente_id, email, duplicado_de) values
+  ('10000000-0000-0000-0000-000000000001', 'dup-principal@f1.com', '30000000-0000-0000-0000-000000000001');
+select is((select count(*)::int from public.leads where duplicado_de = '30000000-0000-0000-0000-000000000001'), 1, 'hay un duplicado del principal de prueba');
+select lives_ok($$ delete from public.leads where id = '30000000-0000-0000-0000-000000000001' $$, 'admin elimina el principal con duplicados');
+select is((select count(*)::int from public.leads where email = 'dup-principal@f1.com'), 0, 'el duplicado se borra en cascada junto al principal');
 
 select pg_temp.como('00000000-0000-0000-0000-00000000000e', 'aal2');
 select is((select count(*)::int from public.leads where email in ('a@f1.com','b@f2.com')), 1, 'editor solo ve su fuente');
@@ -67,6 +77,9 @@ select pg_temp.como('00000000-0000-0000-0000-00000000000c', 'aal2');
 select is((select count(*)::int from public.leads where email in ('a@f1.com','b@f2.com')), 1, 'lector ve su fuente');
 update public.leads set cargo = 'Y' where email = 'a@f1.com';
 select is((select cargo from public.leads where email = 'a@f1.com'), 'X', 'lector no puede actualizar');
+delete from public.leads;
+select is((select count(*)::int from public.leads where email in ('a@f1.com','b@f2.com')), 1,
+  'lector no admin: delete no borra nada (RLS filtra las filas, no lanza error)');
 
 reset role;
 set local role anon;
