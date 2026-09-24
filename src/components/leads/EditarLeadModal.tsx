@@ -42,6 +42,7 @@ export function EditarLeadModal({
   const [status, setStatus] = useState(lead.status);
   const [errores, setErrores] = useState<ErrorCampo[]>([]);
   const [guardando, setGuardando] = useState(false);
+  const [errorGuardado, setErrorGuardado] = useState<string | null>(null);
 
   const campoExtra = (key: string) => fuente?.campos.find((c) => c.key === key);
   const extraKeys = useMemo(() => {
@@ -54,6 +55,7 @@ export function EditarLeadModal({
   const setCampo = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   const guardar = async () => {
+    setErrorGuardado(null);
     const entrada = separarLead(form);
     const errs = validarLead(entrada, fuente?.campos ?? []);
     setErrores(errs);
@@ -64,6 +66,8 @@ export function EditarLeadModal({
       for (const k of NUCLEO) (cambios as Record<string, unknown>)[k] = (entrada as Record<string, unknown>)[k] ?? null;
       await actualizarLead(lead.id, cambios);
       onGuardado();
+    } catch {
+      setErrorGuardado('No se pudo guardar. Intenta de nuevo.');
     } finally {
       setGuardando(false);
     }
@@ -148,6 +152,10 @@ export function EditarLeadModal({
               </div>
             )}
           </div>
+
+          {errorGuardado && (
+            <p role="alert" className="ax-note" style={{ color: 'var(--ax-danger-500)', margin: '0 var(--ax-space-5) var(--ax-space-3)' }}>{errorGuardado}</p>
+          )}
 
           <div className="ax-card__footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--ax-space-2)', borderTop: '1px solid var(--ax-border)' }}>
             <button type="button" className="ax-btn ax-btn--ghost" onClick={onCerrar}>Cancelar</button>

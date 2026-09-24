@@ -6,6 +6,7 @@
  * (clases ax-table*, ax-badge--*, ax-checkbox, paginación, estado vacío).
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import Link from 'next/link';
 import {
   cambiarEstado,
   ESTADOS,
@@ -97,7 +98,9 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [columnasListas, setColumnasListas] = useState(false);
+  const [loteError, setLoteError] = useState<string | null>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
+  const cargaId = useRef(0);
 
   // columnas visibles: restaurar de localStorage al montar / cambiar de fuente.
   // El guardado (efecto siguiente) espera a `columnasListas` para no pisar el
@@ -136,12 +139,23 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
   useEffect(() => { setQInput(filtro.q ?? ''); }, [filtro.q]);
 
   const cargar = useCallback(() => {
+    const id = ++cargaId.current;
     setCargando(true);
     setError(null);
     listarLeads(filtro, orden, pagina, porPagina)
-      .then(({ filas: f, total: t }) => { setFilas(f); setTotal(t); })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : 'Error al cargar leads'))
-      .finally(() => setCargando(false));
+      .then(({ filas: f, total: t }) => {
+        if (id !== cargaId.current) return; // respuesta de una carga vieja: descartar
+        setFilas(f);
+        setTotal(t);
+      })
+      .catch((e: unknown) => {
+        if (id !== cargaId.current) return;
+        setError(e instanceof Error ? e.message : 'Error al cargar leads');
+      })
+      .finally(() => {
+        if (id !== cargaId.current) return;
+        setCargando(false);
+      });
   }, [filtro, orden, pagina, porPagina]);
 
   useEffect(() => { cargar(); }, [cargar]);
@@ -188,9 +202,14 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
 
   const cambiarEstadoLote = async (estado: string) => {
     if (!estado || !seleccion.size) return;
-    await cambiarEstado([...seleccion], estado);
-    setSeleccion(new Set());
-    cargar();
+    setLoteError(null);
+    try {
+      await cambiarEstado([...seleccion], estado);
+      setSeleccion(new Set());
+      cargar();
+    } catch (e) {
+      setLoteError(e instanceof Error ? e.message : 'No se pudo cambiar el estado. Intenta de nuevo.');
+    }
   };
 
   const totalPaginas = Math.max(1, Math.ceil(total / porPagina));
@@ -227,6 +246,12 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
                 <span className="ax-btn__label">Filtros{contadorFiltros > 0 ? ` (${contadorFiltros})` : ''}</span>
               </button>
               <ColumnasMenu columnas={columnas.map(({ key, label }) => ({ key, label }))} visibles={visibles} onCambiar={setVisibles} />
+              {puedeEditar && (
+                <Link href="/leads/importar" className="ax-btn ax-btn--secondary ax-btn--sm">
+                  <svg className="ax-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2" /><path d="M7 9l5 -5l5 5" /><path d="M12 4l0 12" /></svg>
+                  <span className="ax-btn__label">Importar</span>
+                </Link>
+              )}
             </div>
           </div>
 
@@ -247,6 +272,10 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
                 <svg className="ax-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6l-12 12" /><path d="M6 6l12 12" /></svg>
               </button>
             </div>
+          )}
+
+          {loteError && (
+            <p role="alert" style={{ margin: '0 var(--ax-space-5) var(--ax-space-3)', color: 'var(--ax-danger-500)', fontSize: 'var(--ax-text-sm)' }}>{loteError}</p>
           )}
 
           {error && (
@@ -278,11 +307,19 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
                         className={`ax-table__th${c.orden ? ' ax-table__th--sortable' : ''}`}
                         scope="col"
                         aria-sort={ariaSort(c.orden)}
-                        onClick={() => sortBy(c.orden)}
                       >
-                        {c.label} {c.orden && <SortGlyph activo={orden.campo === c.orden} asc={orden.asc} />}
+                        {c.orden ? (
+                          <button
+                            type="button"
+                            onClick={() => sortBy(c.orden)}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 0, padding: 0, margin: 0, font: 'inherit', color: 'inherit', cursor: 'pointer' }}
+                          >
+                            {c.label} <SortGlyph activo={orden.campo === c.orden} asc={orden.asc} />
+                          </button>
+                        ) : c.label}
                       </th>
                     ))}
+                    <th className="ax-table__th" scope="col" style={{ width: 44 }}><span className="ax-visually-hidden">Acciones</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -305,6 +342,16 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
                           ) : c.render ? c.render(l) : (l[c.key as keyof Lead] as string) || '—'}
                         </td>
                       ))}
+                      <td className="ax-table__td" style={{ textAlign: 'end' }}>
+                        <button
+                          type="button"
+                          className="ax-btn ax-btn--ghost ax-btn--icon ax-btn--sm"
+                          aria-label={`${puedeEditar ? 'Editar' : 'Ver'} ${l.nombres ?? l.email ?? 'lead'}`}
+                          onClick={() => setEditando(l)}
+                        >
+                          <svg className="ax-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M7 7h-1a2 2 0 0 0 -2 2v9a2 2 0 0 0 2 2h9a2 2 0 0 0 2 -2v-1" /><path d="M20.385 6.585a2.1 2.1 0 0 0 -2.97 -2.97l-8.415 8.385v3h3l8.385 -8.415z" /><path d="M16 5l3 3" /></svg>
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

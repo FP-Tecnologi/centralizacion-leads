@@ -57,6 +57,7 @@ export function FiltrosPanel({
 }) {
   const [borrador, setBorrador] = useState<FiltroLeads>(filtro);
   const [misFiltros, setMisFiltros] = useState<FilaGuardada[]>([]);
+  const [errorGuardados, setErrorGuardados] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   useFocusTrap(ref, abierto);
 
@@ -101,15 +102,27 @@ export function FiltrosPanel({
   };
 
   const guardarActual = async () => {
-    const nombre = window.prompt('Nombre del filtro');
-    if (!nombre) return;
-    const { data, error } = await supabase.from('filtros_guardados').insert({ nombre, definicion: borrador }).select('id,nombre,definicion').single();
-    if (!error && data) setMisFiltros((prev) => [...prev, data as FilaGuardada].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+    setErrorGuardados(null);
+    try {
+      const nombre = window.prompt('Nombre del filtro');
+      if (!nombre) return;
+      const { data, error } = await supabase.from('filtros_guardados').insert({ nombre, definicion: borrador }).select('id,nombre,definicion').single();
+      if (error) throw error;
+      setMisFiltros((prev) => [...prev, data as FilaGuardada].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+    } catch {
+      setErrorGuardados('No se pudo guardar el filtro. Intenta de nuevo.');
+    }
   };
   const borrarGuardado = async (id: string) => {
-    if (!window.confirm('¿Borrar este filtro guardado?')) return;
-    await supabase.from('filtros_guardados').delete().eq('id', id);
-    setMisFiltros((prev) => prev.filter((f) => f.id !== id));
+    setErrorGuardados(null);
+    try {
+      if (!window.confirm('¿Borrar este filtro guardado?')) return;
+      const { error } = await supabase.from('filtros_guardados').delete().eq('id', id);
+      if (error) throw error;
+      setMisFiltros((prev) => prev.filter((f) => f.id !== id));
+    } catch {
+      setErrorGuardados('No se pudo borrar el filtro. Intenta de nuevo.');
+    }
   };
   const cargarGuardado = (id: string) => {
     const fila = misFiltros.find((f) => f.id === id);
@@ -237,6 +250,9 @@ export function FiltrosPanel({
             <button type="button" className="ax-btn ax-btn--secondary ax-btn--sm" onClick={guardarActual} style={{ marginTop: 'var(--ax-space-2)' }}>
               Guardar filtro actual
             </button>
+            {errorGuardados && (
+              <p role="alert" className="ax-note" style={{ color: 'var(--ax-danger-500)', marginTop: 'var(--ax-space-2)' }}>{errorGuardados}</p>
+            )}
           </div>
         </div>
 
