@@ -13,7 +13,6 @@
  * hay lib/api.ts ni flujo de Google.
  */
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import Link from 'next/link';
 
 export const SYSTEM_NAME = 'Sistema de Centralización de Leads';
 export const SYSTEM_SUBTITLE = 'FPTecnologi · Gestión unificada de leads de landings, importaciones y apps offline';
@@ -53,16 +52,6 @@ export function OffappTools({ style }: { style?: CSSProperties }) {
         {theme === 'dark' ? SUN : MOON}
       </button>
     </div>
-  );
-}
-
-/** Marca inline compacta (panel cover / cabecera de la tarjeta). */
-export function BrandInline({ logoWidth = 150 }: { logoWidth?: number }) {
-  return (
-    <Link href="/" className="ax-cluster" aria-label="Sistema de Centralización de Leads" style={{ gap: 'var(--ax-space-3)', textDecoration: 'none' }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/logo-fptecnologi.svg" alt="FPTecnologi" width={logoWidth} style={{ height: 'auto' }} />
-    </Link>
   );
 }
 

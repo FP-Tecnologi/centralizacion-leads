@@ -12,12 +12,7 @@ import { supabase } from '../../lib/supabase';
 
 const MENSAJE_OK = 'Si el correo está registrado, te enviamos un enlace para restablecer tu contraseña.';
 const MENSAJE_RATE_LIMIT = 'Ya enviamos un enlace hace poco. Espera unos minutos antes de volver a intentar.';
-
-function mensajeError(err: unknown): string {
-  const msg = err instanceof Error ? err.message : '';
-  if (/rate limit|too many/i.test(msg)) return MENSAJE_RATE_LIMIT;
-  return MENSAJE_RATE_LIMIT;
-}
+const MENSAJE_ENVIO_FALLIDO = 'No pudimos enviar el correo. Revisa tu conexión e intenta de nuevo.';
 
 export function Recuperar() {
   const [email, setEmail] = useState('');
@@ -44,10 +39,14 @@ export function Recuperar() {
         // en ambos casos mostramos el mismo mensaje neutral. Solo el rate
         // limit real se distingue, para no bloquear al usuario en silencio.
         if (err && /rate limit|too many/i.test(err.message)) {
-          setError(mensajeError(err));
+          setError(MENSAJE_RATE_LIMIT);
         } else {
           setEnviado(true);
         }
+      })
+      .catch(() => {
+        setLoading(false);
+        setError(MENSAJE_ENVIO_FALLIDO);
       });
   }
 
