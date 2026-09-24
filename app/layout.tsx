@@ -66,7 +66,11 @@ export const metadata: Metadata = {
   },
   description:
     'Sistema de Leads de FPTecnologi: landings, importación, dashboard y conexiones.',
-  icons: { icon: '/favicon.svg' },
+  icons: {
+    icon: '/logo-fptecnologi-icon.svg',
+    shortcut: '/logo-fptecnologi-icon.svg',
+    apple: '/logo-fptecnologi-icon.svg',
+  },
 };
 
 export const viewport: Viewport = {
