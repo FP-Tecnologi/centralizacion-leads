@@ -14,7 +14,7 @@
  *
  * Bands — keep in lockstep with shell.css §18:
  *   < 992px (lg) … lang · fullscreen · apps
- *   < 768px (md) … + cart · customizer
+ *   < 768px (md) … + cart
  *
  * SSR: starts empty, so the server render (and React's first client pass) omit
  * the trigger — no hydration mismatch. The mount effect measures immediately.
@@ -33,7 +33,7 @@ function computeShed(): string[] {
   }
   const shed: string[] = [];
   if (w < 992) shed.push('lang', 'fullscreen', 'apps');
-  if (w < 768) shed.push('cart', 'customizer');
+  if (w < 768) shed.push('cart');
   return shed;
 }
 

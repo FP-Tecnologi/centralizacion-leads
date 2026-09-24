@@ -41,7 +41,7 @@ export function readTokens(): Tokens {
     gridColor: cssVar('--ax-border') || 'rgba(255,255,255,.07)',
     axisText: cssVar('--ax-text-subtle') || '#646E80',
     labelText: cssVar('--ax-text-muted') || '#98A2B3',
-    fontSans: cssVar('--ax-font-sans') || 'Inter, system-ui, sans-serif',
+    fontSans: cssVar('--ax-font-sans') || 'Montserrat, system-ui, sans-serif',
     fontMono: cssVar('--ax-font-mono') || 'JetBrains Mono, ui-monospace, monospace',
     dark: document.documentElement.getAttribute('data-ax-theme') === 'dark',
     rtl: document.documentElement.getAttribute('dir') === 'rtl',

@@ -4,18 +4,24 @@
  * Replicates the reference document <head> contract (BUILD-CONVENTIONS §3):
  *   1. The anti-flash theme-restore IIFE is the FIRST executable thing in
  *      <head>, before any stylesheet — inlined as a raw <script> with
- *      dangerouslySetInnerHTML so the bundler NEVER defers it. It reads ax:*
- *      localStorage and sets all data-ax-* + dir + lang on <html> before paint.
- *      (Verbatim copy of src/html/partials/head.html lines 12–83.)
- *   2. Google Fonts — Inter / Space Grotesk / JetBrains Mono + preconnects.
+ *      dangerouslySetInnerHTML so the bundler NEVER defers it. It reads
+ *      ax:theme / ax:collapsed and sets data-ax-theme / data-ax-collapsed on
+ *      <html> before paint. Every other visual choice (shell style, font,
+ *      accent) is now FIXED — no personalization UI exists anymore, so there
+ *      is nothing else to restore from storage.
+ *   2. Google Fonts — Montserrat (sans + display) / JetBrains Mono (code) +
+ *      preconnects.
  *   3. The shared --ax-* token core (app.css) imported once below.
  *
- * `suppressHydrationWarning` on <html> is required: the IIFE mutates <html>
- * attributes before React hydrates, so the server markup and the post-IIFE DOM
- * intentionally differ on data-ax-* — that is the anti-flash design, not a bug.
+ * `suppressHydrationWarning` on <html> is required: the IIFE mutates
+ * data-ax-theme/data-ax-collapsed before React hydrates, so the server markup
+ * and the post-IIFE DOM intentionally differ on those two — that is the
+ * anti-flash design, not a bug. `data-ax-shell-style="detached"` is rendered
+ * directly on <html> below (never restored from storage), so there is no
+ * flash to guard for it.
  *
- * The whole app is wrapped in <CustomizerProvider> (a client component) so the
- * customizer/header controls share one source of theme truth.
+ * The whole app is wrapped in <CustomizerProvider> (a client component) so
+ * header controls (dark-mode toggle, collapsed rail) share one source of truth.
  */
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
@@ -23,8 +29,10 @@ import { CustomizerProvider } from '../src/context/CustomizerContext';
 import { AuthProvider } from '../src/context/AuthContext';
 import '../src/styles/app.css';
 
-/* The anti-flash IIFE — verbatim from the HTML reference. MUST run before the
-   stylesheet and before React. Kept as a string so Next inlines it untouched. */
+/* The anti-flash IIFE. MUST run before the stylesheet and before React. Kept
+   as a string so Next inlines it untouched. Only theme + collapsed remain —
+   every other data-ax-* attribute is now fixed (rendered on <html> below or
+   not used at all), so there is nothing else to restore before paint. */
 const ANTI_FLASH = `
 (function () {
   var D = document.documentElement, LS;
@@ -43,72 +51,9 @@ const ANTI_FLASH = `
   var resolved = (theme === 'system') ? (sysDark ? 'dark' : 'light') : theme;
   D.setAttribute('data-ax-theme', resolved);
 
-  /* ---- ACCENT ---- */
-  var accent = get('ax:accent') || 'azul-logo';
-  if (accent === 'azul-logo') D.removeAttribute('data-ax-accent');
-  else D.setAttribute('data-ax-accent', accent);
-
-  /* ---- FONT (any Google family; the default, Inter, needs no attr + no link) ----
-     Mirrors src/lib/fonts.ts. Injected here rather than after hydration so the
-     face is already in flight when the first paint happens — otherwise every
-     page load would flash Inter before swapping. A family chosen in the
-     customizer rides an INLINE --ax-font-sans, exactly as the custom accent
-     colour does; its weight ramp was resolved from the Google Fonts catalog at
-     pick time and persisted, because this script must rebuild the same URL
-     without being able to load that catalog. */
-  var fontFamily = (get('ax:font') === 'custom') ? get('ax:font-custom') : null;
-  if (fontFamily) {
-    D.setAttribute('data-ax-font', 'custom');
-    D.style.setProperty('--ax-font-sans', '"' + fontFamily + '", ui-sans-serif, system-ui, sans-serif');
-    var fl = document.createElement('link');
-    fl.id = 'ax-font-link'; fl.rel = 'stylesheet';
-    fl.href = 'https://fonts.googleapis.com/css2?family=' + fontFamily.replace(/ /g, '+') +
-              (get('ax:font-weights') || ':wght@400;500;600;700') + '&display=swap';
-    document.head.appendChild(fl);
-  } else { D.removeAttribute('data-ax-font'); }
-
-  /* ---- LANG + DIR ---- */
-  var lang = (get('ax:lang') || 'ES').toUpperCase();
-  D.setAttribute('lang', lang.toLowerCase());
-  var dirStored = get('ax:dir');
-  var dir = dirStored ? dirStored : (lang === 'AR' ? 'rtl' : 'ltr');
-  D.setAttribute('dir', dir);
-
-  /* ---- LAYOUT / SCHEME attributes (write only non-defaults) ---- */
-  function setAttr(attr, key, def){
-    var v = get(key);
-    if (v && v !== def) D.setAttribute(attr, v); else D.removeAttribute(attr);
-  }
-  setAttr('data-ax-nav',              'ax:nav',              'vertical');
-  setAttr('data-ax-shell-style',      'ax:shell-style',      'default');
-  setAttr('data-ax-sidebar-behavior', 'ax:sidebar-behavior', 'collapsible');
-  setAttr('data-ax-menu',             'ax:menu',             'click');
-  setAttr('data-ax-page',             'ax:page',             'regular');
-  setAttr('data-ax-width',            'ax:width',            'fluid');
-  setAttr('data-ax-header-position',  'ax:header-position',  'fixed');
-  setAttr('data-ax-sidebar-position', 'ax:sidebar-position', 'fixed');
-  setAttr('data-ax-sidebar',          'ax:sidebar-scheme',   'light');
-  setAttr('data-ax-header',           'ax:header-scheme',    'light');
-  setAttr('data-ax-sidebar-image',    'ax:sidebar-image',    'none');
-  setAttr('data-ax-loader',           'ax:loader',           'on');
-
-  /* ---- COLLAPSED RAIL (header toggle; default expanded) ---- */
-  var behavior = get('ax:sidebar-behavior') || 'collapsible';
-  if (behavior === 'collapsible' && get('ax:collapsed') === '1') D.setAttribute('data-ax-collapsed', '');
+  /* ---- COLLAPSED RAIL (sidebar header toggle; default expanded) ---- */
+  if (get('ax:collapsed') === '1') D.setAttribute('data-ax-collapsed', '');
   else D.removeAttribute('data-ax-collapsed');
-
-  /* ---- CUSTOM COLOR PICKERS (inline style; re-derive ramp deterministically) ---- */
-  var customAccent = get('ax:accent-custom');
-  if (accent === 'custom' && customAccent) {
-    D.style.setProperty('--ax-accent', customAccent);
-    var h = customAccent.replace('#','');
-    var r=parseInt(h.substr(0,2),16),g=parseInt(h.substr(2,2),16),b=parseInt(h.substr(4,2),16);
-    var L = (0.2126*r + 0.7152*g + 0.0722*b)/255;
-    D.style.setProperty('--ax-on-accent', L > 0.62 ? '#1F1602' : '#FFFFFF');
-    D.setAttribute('data-ax-accent','custom');
-  }
-  var bg = get(resolved === 'dark' ? 'ax:bg-custom-dark' : 'ax:bg-custom');
-  if (bg) D.style.setProperty('--ax-canvas', bg);
 })();
 `;
 
@@ -136,15 +81,15 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="es" suppressHydrationWarning>
+    <html lang="es" suppressHydrationWarning data-ax-shell-style="detached">
       <head>
         {/* Anti-flash theme-restore — FIRST in <head>, before app.css. */}
         <script dangerouslySetInnerHTML={{ __html: ANTI_FLASH }} />
-        {/* Google Fonts — Inter (sans) · Space Grotesk (display) · JetBrains Mono (mono) */}
+        {/* Google Fonts — Montserrat (sans + display) · JetBrains Mono (mono) */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@500;600&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap"
           rel="stylesheet"
         />
       </head>

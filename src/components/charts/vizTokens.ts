@@ -36,7 +36,7 @@ const FALLBACK: Record<string, string> = {
   '--ax-surface-subtle': '#111C31',
   '--ax-surface-overlay': '#1E293B',
   '--ax-on-accent': '#0B141E',
-  '--ax-font-sans': 'Inter, system-ui, sans-serif',
+  '--ax-font-sans': 'Montserrat, system-ui, sans-serif',
   '--ax-font-mono': 'JetBrains Mono, ui-monospace, monospace',
 };
 

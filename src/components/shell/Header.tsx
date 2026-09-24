@@ -5,7 +5,7 @@
  * Faithful re-expression of partials/header.html: sidebar toggle + ⌘K command
  * search, then the SHARED right-hand utility cluster (<HeaderUtils>) — language
  * menu, fullscreen, light/dark quick-toggle, app grid, cart, notifications,
- * profile, customizer trigger.
+ * profile.
  *
  * The cluster lives in HeaderUtils.tsx because the full-screen <AppBar> renders
  * the identical controls; the reference extracted the same items into
@@ -26,11 +26,9 @@ const ICON = {
 
 export function Header({
   onCommand,
-  onCustomizer,
   onNavToggle,
 }: {
   onCommand: () => void;
-  onCustomizer: () => void;
   /** Burger handler — <Layout/> routes it to the mobile drawer or the rail
    *  collapse depending on the band, exactly like axHeader.toggleSidebar(). */
   onNavToggle: () => void;
@@ -66,8 +64,8 @@ export function Header({
 
       <span className="ax-header__spacer"></span>
 
-      {/* ===== RIGHT UTILITY CLUSTER — shared with <AppBar> (items 4–11) ===== */}
-      <HeaderUtils onCustomizer={onCustomizer} />
+      {/* ===== RIGHT UTILITY CLUSTER — shared with <AppBar> (items 4–10) ===== */}
+      <HeaderUtils />
     </header>
   );
 }

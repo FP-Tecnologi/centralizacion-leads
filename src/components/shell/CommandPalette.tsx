@@ -6,11 +6,11 @@
  * shell from partials/command.html: backdrop → panel → query row (search icon +
  * input + "esc" keycap + close icon-button) → results listbox → key-hint footer.
  *
- * Mounted by <Layout> and <AppLayout> at the END of the tree — i.e. at body
- * level next to the customizer, NEVER inside .ax-header. The header's
- * backdrop-filter makes it a containing block for fixed descendants, which would
- * pin this overlay inside the bar. The (bare) group deliberately has no palette,
- * matching the 23 standalone reference pages that omit the partial.
+ * Mounted by <Layout> and <AppLayout> at the END of the tree, NEVER inside
+ * .ax-header. The header's backdrop-filter makes it a containing block for
+ * fixed descendants, which would pin this overlay inside the bar. The (bare)
+ * group deliberately has no palette, matching the 23 standalone reference
+ * pages that omit the partial.
  *
  * The dialog stays MOUNTED and toggles `hidden` + `aria-hidden` + `.is-open`,
  * exactly like the reference root — that is the contract shell.css §13 paints
@@ -63,7 +63,7 @@ interface Item {
   slug?: string;
   href?: string;
   external?: boolean;
-  action?: 'toggle-theme' | 'open-customizer';
+  action?: 'toggle-theme';
 }
 
 interface ResultGroup {
@@ -94,10 +94,7 @@ function buildItems(): Item[] {
     });
   }
   // Actions
-  items.push(
-    { group: 'Actions', title: 'Toggle dark mode', action: 'toggle-theme', crumb: 'Theme', keywords: 'dark light theme mode' },
-    { group: 'Actions', title: 'Open theme customizer', action: 'open-customizer', crumb: 'Settings', keywords: 'customizer settings theme appearance' },
-  );
+  items.push({ group: 'Actions', title: 'Toggle dark mode', action: 'toggle-theme', crumb: 'Theme', keywords: 'dark light theme mode' });
   return items;
 }
 
@@ -168,15 +165,7 @@ function search(items: Item[], q: string, recent: string[]): ResultGroup[] {
   return out;
 }
 
-export function CommandPalette({
-  open,
-  onClose,
-  onCustomizer,
-}: {
-  open: boolean;
-  onClose: () => void;
-  onCustomizer: () => void;
-}) {
+export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
   const c = useCustomizer();
   const [q, setQ] = useState('');
@@ -233,11 +222,6 @@ export function CommandPalette({
     if (row.action === 'toggle-theme') {
       c.toggleTheme();
       close();
-      return;
-    }
-    if (row.action === 'open-customizer') {
-      close();
-      onCustomizer();
       return;
     }
     if (row.slug) pushRecent(row.slug);

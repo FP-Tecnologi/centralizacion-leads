@@ -74,13 +74,7 @@ const MAIL_APPS: AppRow[] = [
 /** Dashboard root — the same "/" route the sidebar brand links to. */
 const DASHBOARD_ROOT = '/';
 
-export function AppBar({
-  onCommand,
-  onCustomizer,
-}: {
-  onCommand: () => void;
-  onCustomizer: () => void;
-}) {
+export function AppBar({ onCommand }: { onCommand: () => void }) {
   const slug = slugFromPath(usePathname() || '/');
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
@@ -166,8 +160,8 @@ export function AppBar({
 
       <span className="ax-header__spacer"></span>
 
-      {/* ===== RIGHT UTILITY CLUSTER — shared with <Header> (items 4–11) ===== */}
-      <HeaderUtils onCustomizer={onCustomizer} />
+      {/* ===== RIGHT UTILITY CLUSTER — shared with <Header> (items 4–10) ===== */}
+      <HeaderUtils />
     </header>
   );
 }

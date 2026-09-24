@@ -30,7 +30,6 @@ import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { Footer } from './Footer';
 import { Loader } from './Loader';
-import { Customizer } from './Customizer';
 import { CommandPalette } from './CommandPalette';
 import { slugFromPath } from '../../lib/manifest';
 import { useCustomizer } from '../../context/CustomizerContext';
@@ -40,7 +39,6 @@ export function Layout({ children }: { children: ReactNode }) {
   const pathname = usePathname() || '/';
   const c = useCustomizer();
   const [commandOpen, setCommandOpen] = useState(false);
-  const [customizerOpen, setCustomizerOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const isMobile = useMediaQuery('(max-width: 767.98px)');
 
@@ -119,23 +117,14 @@ export function Layout({ children }: { children: ReactNode }) {
           onClick={() => setDrawerOpen(false)}
         ></div>
         <div className="ax-shell">
-          <Header
-            onCommand={() => setCommandOpen(true)}
-            onCustomizer={() => setCustomizerOpen(true)}
-            onNavToggle={onNavToggle}
-          />
+          <Header onCommand={() => setCommandOpen(true)} onNavToggle={onNavToggle} />
           <main className="ax-main" id="ax-main">
             {children}
           </main>
           <Footer />
         </div>
       </div>
-      <Customizer open={customizerOpen} onClose={() => setCustomizerOpen(false)} />
-      <CommandPalette
-        open={commandOpen}
-        onClose={() => setCommandOpen(false)}
-        onCustomizer={() => setCustomizerOpen(true)}
-      />
+      <CommandPalette open={commandOpen} onClose={() => setCommandOpen(false)} />
     </>
   );
 }
