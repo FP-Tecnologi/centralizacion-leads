@@ -1,12 +1,16 @@
 'use client';
 /*
  * Sistema de Leads — editor de campos de formulario de una fuente. Cada fila
- * es un CampoFormulario; los campos ya guardados (presentes al montar) tienen
- * `key` de solo lectura para no romper el `extra` de leads ya registrados. Los
- * campos núcleo (email, telefono, ...) llevan un badge "núcleo".
+ * es un CampoFormulario; los campos ya guardados en el servidor (`clavesGuardadas`,
+ * derivada por el padre de la fuente tal como está persistida) tienen `key` de
+ * solo lectura para no romper el `extra` de leads ya registrados — ese conjunto
+ * lo controla GestionarFuente (no un snapshot local al montar), así se refresca
+ * solo después de un Guardar exitoso y no permite regenerar la clave de un
+ * campo recién guardado. Los campos núcleo (email, telefono, ...) llevan un
+ * badge "núcleo". Toda fila con clave vacía o duplicada (clavesInvalidas) se
+ * marca en rojo; GestionarFuente bloquea el Guardar mientras haya alguna.
  */
-import { useState } from 'react';
-import { normalizarEncabezado } from '../../lib/leads/mapeo';
+import { claveDesdeLabel, clavesInvalidas } from '../../lib/leads/camposUtil';
 import { NUCLEO, type CampoFormulario, type TipoCampo } from '../../../supabase/functions/_shared/lead';
 
 const TIPOS: { value: TipoCampo; label: string }[] = [
@@ -19,16 +23,6 @@ const TIPOS: { value: TipoCampo; label: string }[] = [
   { value: 'documento', label: 'Documento' },
 ];
 
-function claveUnica(base: string, existentes: string[]): string {
-  let candidata = base || 'campo';
-  let n = 2;
-  while (existentes.includes(candidata)) {
-    candidata = `${base || 'campo'}_${n}`;
-    n += 1;
-  }
-  return candidata;
-}
-
 function IconoFlecha({ abajo }: { abajo?: boolean }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" width={16} height={16} aria-hidden="true">
@@ -37,8 +31,18 @@ function IconoFlecha({ abajo }: { abajo?: boolean }) {
   );
 }
 
-export function CamposEditor({ value, onChange }: { value: CampoFormulario[]; onChange: (v: CampoFormulario[]) => void }) {
-  const [clavesIniciales] = useState(() => new Set(value.map((c) => c.key)));
+export function CamposEditor({
+  value,
+  onChange,
+  clavesGuardadas,
+}: {
+  value: CampoFormulario[];
+  onChange: (v: CampoFormulario[]) => void;
+  /** Claves tal como están persistidas ahora mismo en el servidor (las controla
+   *  GestionarFuente, derivadas de la fuente guardada) — de solo lectura. */
+  clavesGuardadas: Set<string>;
+}) {
+  const invalidas = clavesInvalidas(value);
 
   const set = (i: number, cambios: Partial<CampoFormulario>) =>
     onChange(value.map((c, j) => (j === i ? { ...c, ...cambios } : c)));
@@ -55,18 +59,18 @@ export function CamposEditor({ value, onChange }: { value: CampoFormulario[]; on
 
   const agregar = () => {
     const claves = value.map((c) => c.key);
-    const key = claveUnica(normalizarEncabezado(''), claves);
+    const key = claveDesdeLabel('', claves);
     onChange([...value, { key, label: '', tipo: 'texto', requerido: false }]);
   };
 
   const cambiarLabel = (i: number, label: string) => {
     const c = value[i];
-    if (clavesIniciales.has(c.key)) {
+    if (clavesGuardadas.has(c.key)) {
       set(i, { label });
       return;
     }
     const otras = value.filter((_, j) => j !== i).map((x) => x.key);
-    const key = claveUnica(normalizarEncabezado(label), otras);
+    const key = claveDesdeLabel(label, otras);
     onChange(value.map((x, j) => (j === i ? { ...x, label, key } : x)));
   };
 
@@ -74,7 +78,8 @@ export function CamposEditor({ value, onChange }: { value: CampoFormulario[]; on
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--ax-space-3)' }}>
       {value.map((c, i) => {
         const esNucleoCampo = (NUCLEO as readonly string[]).includes(c.key);
-        const soloLecturaKey = clavesIniciales.has(c.key);
+        const soloLecturaKey = clavesGuardadas.has(c.key);
+        const claveInvalida = invalidas.has(i);
         return (
           <div
             key={i}
@@ -89,7 +94,20 @@ export function CamposEditor({ value, onChange }: { value: CampoFormulario[]; on
               <label className="ax-label" htmlFor={`ce-key-${i}`}>
                 Clave{esNucleoCampo && <span className="ax-badge ax-badge--neutral ax-badge--sm" style={{ marginInlineStart: 6 }}>núcleo</span>}
               </label>
-              <input id={`ce-key-${i}`} className="ax-input ax-input--sm" value={c.key} disabled={soloLecturaKey} onChange={(e) => set(i, { key: e.target.value })} />
+              <input
+                id={`ce-key-${i}`}
+                className="ax-input ax-input--sm"
+                value={c.key}
+                disabled={soloLecturaKey}
+                onChange={(e) => set(i, { key: e.target.value })}
+                aria-invalid={claveInvalida}
+                aria-describedby={claveInvalida ? `ce-key-err-${i}` : undefined}
+              />
+              {claveInvalida && (
+                <p id={`ce-key-err-${i}`} role="alert" className="ax-note" style={{ color: 'var(--ax-danger-500)' }}>
+                  {c.key.trim() ? 'Esta clave ya está en uso por otro campo.' : 'La clave no puede estar vacía.'}
+                </p>
+              )}
             </div>
             <div className="ax-field" style={{ flex: '0 1 160px' }}>
               <label className="ax-label" htmlFor={`ce-tipo-${i}`}>Tipo</label>

@@ -6,12 +6,13 @@
  * landing) y un resumen de registros vía dashboard_resumen (RPC ya existente,
  * evita duplicar el conteo por-fuente).
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { fuentePorSlug, guardarFuente, type Fuente } from '../../lib/leads/datos';
 import { refrescarFuentes } from '../../hooks/useFuentesMenu';
+import { hayClavesInvalidas } from '../../lib/leads/camposUtil';
 import type { CampoFormulario } from '../../../supabase/functions/_shared/lead';
 import { CamposEditor } from './CamposEditor';
 import { PageHead } from '../shell/PageHead';
@@ -69,6 +70,13 @@ export function GestionarFuente({ slug, tipo }: { slug: string; tipo: 'landing' 
       });
   }, [f]);
 
+  // Claves tal como quedaron persistidas la última vez que se cargó/guardó la
+  // fuente — no un snapshot fijo al montar: así un campo recién guardado pasa
+  // a ser de solo lectura de inmediato y no se le puede regenerar la clave
+  // editando la etiqueta de nuevo en la misma sesión.
+  const clavesGuardadas = useMemo(() => new Set((f?.campos ?? []).map((c) => c.key)), [f]);
+  const camposInvalidos = hayClavesInvalidas(campos);
+
   if (f === undefined) return null;
   if (f === null) return <p>{tipo === 'landing' ? 'Landing' : 'App offline'} no encontrada o sin acceso.</p>;
 
@@ -88,10 +96,15 @@ export function GestionarFuente({ slug, tipo }: { slug: string; tipo: 'landing' 
 
   const guardarCampos = async () => {
     setErrorGuardado(null);
+    if (camposInvalidos) {
+      setErrorGuardado('Hay campos con clave vacía o repetida. Corrígelos antes de guardar.');
+      return;
+    }
     setGuardandoCampos(true);
     try {
       const actualizado = await guardarFuente({ id: f.id, campos });
       setF(actualizado);
+      setCampos(actualizado.campos ?? []);
     } catch {
       setErrorGuardado('No se pudo guardar. Intenta de nuevo.');
     } finally {
@@ -174,7 +187,7 @@ export function GestionarFuente({ slug, tipo }: { slug: string; tipo: 'landing' 
           <div className="ax-card__header"><div className="ax-card__titles"><h2 className="ax-card__title">Formulario</h2></div></div>
           <div className="ax-card__body">
             {esAdmin ? (
-              <CamposEditor value={campos} onChange={setCampos} />
+              <CamposEditor value={campos} onChange={setCampos} clavesGuardadas={clavesGuardadas} />
             ) : campos.length ? (
               <ul style={{ margin: 0, paddingInlineStart: 'var(--ax-space-5)', display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {campos.map((c) => <li key={c.key}>{c.label || c.key} ({c.tipo}){c.requerido ? ' · requerido' : ''}</li>)}
@@ -182,8 +195,15 @@ export function GestionarFuente({ slug, tipo }: { slug: string; tipo: 'landing' 
             ) : <p className="ax-text-subtle">Sin campos adicionales.</p>}
           </div>
           {esAdmin && (
-            <div className="ax-card__footer" style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--ax-border)' }}>
-              <button type="button" className="ax-btn ax-btn--primary" disabled={guardandoCampos} onClick={guardarCampos}>Guardar</button>
+            <div className="ax-card__footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--ax-space-3)', borderTop: '1px solid var(--ax-border)' }}>
+              {camposInvalidos && (
+                <p role="alert" className="ax-note" style={{ color: 'var(--ax-danger-500)', margin: 0 }}>
+                  Hay campos con clave vacía o repetida. Corrígelos antes de guardar.
+                </p>
+              )}
+              <button type="button" className="ax-btn ax-btn--primary" disabled={guardandoCampos || camposInvalidos} onClick={guardarCampos} style={{ marginInlineStart: 'auto' }}>
+                Guardar
+              </button>
             </div>
           )}
         </section>
