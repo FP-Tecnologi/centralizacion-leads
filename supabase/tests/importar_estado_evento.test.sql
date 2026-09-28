@@ -1,5 +1,5 @@
 begin;
-select plan(14);
+select plan(15);
 
 insert into public.fuentes (id, nombre, slug, tipo) values ('20000000-0000-0000-0000-000000000009', 'Imp', 'imp', 'importacion');
 
@@ -44,6 +44,11 @@ select is((select invalidos ? 'telefono' from public.leads where email = 'd@x.co
 -- importación sin contacto: se guarda (marcada en el cliente); un envío normal sigue rechazándose.
 select is(public.upsert_lead('20000000-0000-0000-0000-000000000009', '{"nombres":"Solo","_importacion":true}'), 'nueva',
   'fila importada sin contacto se guarda');
+
+-- correo ya existente con el evento por defecto + mismo correo con otro evento: lead nuevo, sin chocar con el índice.
+select public.upsert_lead('20000000-0000-0000-0000-000000000009', '{"email":"z@x.com"}');
+select is(public.upsert_lead('20000000-0000-0000-0000-000000000009', '{"email":"z@x.com","evento":"B"}'), 'nueva',
+  'otro evento para un correo que ya tiene el evento por defecto');
 
 select * from finish();
 rollback;

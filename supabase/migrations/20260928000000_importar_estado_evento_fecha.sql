@@ -28,7 +28,7 @@ $$;
 
 -- unicidad por (fuente, correo, evento) en vez de (fuente, correo).
 drop index if exists public.leads_fuente_email_uq;
-create unique index leads_fuente_email_evento_uq on public.leads (fuente_id, lower(email), evento)
+create unique index if not exists leads_fuente_email_evento_uq on public.leads (fuente_id, lower(email), evento)
   where duplicado_de is null and email is not null and email <> '';
 
 -- create or replace de upsert_lead (20260924000001_columnas_extra.sql): mismos guards y
@@ -108,18 +108,27 @@ begin
     where id = v_id;
     v_res := 'actualizada';
   else
-    insert into leads (fuente_id, nombres, apellido, email, telefono, empresa, ruc, cargo, rubro,
-                       fecha_nacimiento, extra, id_externo, origen, user_agent, status, created_at, invalidos)
-    values (p_fuente, nullif(p ->> 'nombres', ''), nullif(p ->> 'apellido', ''), v_email,
-            v_tel, nullif(p ->> 'empresa', ''), nullif(p ->> 'ruc', ''),
-            nullif(p ->> 'cargo', ''), nullif(p ->> 'rubro', ''),
-            nullif(p ->> 'fecha_nacimiento', '')::date, coalesce(p -> 'extra', '{}'::jsonb), v_ext,
-            coalesce(nullif(p ->> 'origen', ''), 'dashboard'), nullif(p ->> 'user_agent', ''),
-            coalesce(v_estado, 'nuevo'), coalesce(v_creado, now()), v_invalidos)
-    returning id into v_id;
-    -- evento tiene default de columna (not null): solo se pisa cuando el archivo trae uno.
-    if v_evento is not null then
-      update leads set evento = v_evento where id = v_id;
+    -- el evento va en el mismo insert: insertar con el default ('EXPOMINA Perú 2026') y
+    -- cambiarlo después chocaba con el índice único si ese correo ya existía en la fuente
+    -- con el evento por defecto. Sin evento en el archivo, se deja el default de la columna.
+    if v_evento is null then
+      insert into leads (fuente_id, nombres, apellido, email, telefono, empresa, ruc, cargo, rubro,
+                         fecha_nacimiento, extra, id_externo, origen, user_agent, status, created_at, invalidos)
+      values (p_fuente, nullif(p ->> 'nombres', ''), nullif(p ->> 'apellido', ''), v_email,
+              v_tel, nullif(p ->> 'empresa', ''), nullif(p ->> 'ruc', ''),
+              nullif(p ->> 'cargo', ''), nullif(p ->> 'rubro', ''),
+              nullif(p ->> 'fecha_nacimiento', '')::date, coalesce(p -> 'extra', '{}'::jsonb), v_ext,
+              coalesce(nullif(p ->> 'origen', ''), 'dashboard'), nullif(p ->> 'user_agent', ''),
+              coalesce(v_estado, 'nuevo'), coalesce(v_creado, now()), v_invalidos);
+    else
+      insert into leads (fuente_id, nombres, apellido, email, telefono, empresa, ruc, cargo, rubro,
+                         fecha_nacimiento, extra, id_externo, origen, user_agent, status, created_at, invalidos, evento)
+      values (p_fuente, nullif(p ->> 'nombres', ''), nullif(p ->> 'apellido', ''), v_email,
+              v_tel, nullif(p ->> 'empresa', ''), nullif(p ->> 'ruc', ''),
+              nullif(p ->> 'cargo', ''), nullif(p ->> 'rubro', ''),
+              nullif(p ->> 'fecha_nacimiento', '')::date, coalesce(p -> 'extra', '{}'::jsonb), v_ext,
+              coalesce(nullif(p ->> 'origen', ''), 'dashboard'), nullif(p ->> 'user_agent', ''),
+              coalesce(v_estado, 'nuevo'), coalesce(v_creado, now()), v_invalidos, v_evento);
     end if;
     v_res := 'nueva';
   end if;
