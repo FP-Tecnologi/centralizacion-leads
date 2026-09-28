@@ -5,10 +5,10 @@ Hay dos formas. **A (recomendada): desde Git** con "Implementar una aplicación 
 
 ## A. Desde el repositorio Git (Sitios web y aplicaciones → Implementar Node.js)
 
-Repo privado `FP-Tecnologi/centralizaci-n-leads`, con el `package.json` en la raíz.
+Repo privado `FP-Tecnologi/centralizacion-leads`, con el `package.json` en la raíz.
 
 1. **Origen → Repositorio Git**, URL (SSH, porque el repo es privado):
-   `git@github.com:FP-Tecnologi/centralizaci-n-leads.git` — rama **`main`**.
+   `git@github.com:FP-Tecnologi/centralizacion-leads.git` — rama **`main`**.
 2. Clave SSH del servidor: cPanel → Seguridad → Acceso SSH → Administrar claves SSH →
    generar (sin contraseña). La **pública** (`.pub`, empieza con `ssh-rsa`) va en GitHub →
    este repo → Settings → Deploy keys → Add deploy key, **solo lectura**. La privada nunca

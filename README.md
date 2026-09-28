@@ -74,7 +74,7 @@ El contrato compartido (campos núcleo, validación) vive en `supabase/functions
 Desde la raíz de `FPTecnologi-HUB` (el remoto `leads` apunta a este repo):
 
 ```bash
-git remote add leads https://github.com/FP-Tecnologi/centralizaci-n-leads.git   # si no existe
+git remote add leads https://github.com/FP-Tecnologi/centralizacion-leads.git   # si no existe
 git fetch leads
 git subtree pull --prefix=apps/leads leads main   # actualiza apps/leads con lo último de aquí
 ```
