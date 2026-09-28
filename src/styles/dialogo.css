@@ -1,0 +1,116 @@
+/*
+ * Sistema de Leads — diálogo de confirmación/texto (components/ui/Dialogo.tsx),
+ * reemplazo de window.confirm / window.prompt. Tonos: peligro · aviso · info.
+ */
+.ax-dialogo {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--ax-z-modal, 1200) + 50); /* sobre modales y drawers (p. ej. el panel de filtros) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--ax-space-4);
+}
+.ax-dialogo__fondo {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(8, 12, 20, 0.55);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  animation: ax-dialogo-fundido var(--ax-motion-fast, 150ms) ease-out;
+}
+.ax-dialogo__caja {
+  --_tono: var(--ax-warning-500);
+  position: relative;
+  width: min(440px, 100%);
+  border-radius: var(--ax-radius-xl, 16px);
+  border: 1px solid var(--ax-border);
+  background: var(--ax-surface-solid, var(--ax-surface));
+  box-shadow: var(--ax-shadow-lg, 0 20px 50px rgba(0, 0, 0, 0.35));
+  overflow: hidden;
+  animation: ax-dialogo-entrada 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.ax-dialogo--peligro { --_tono: var(--ax-danger-500); }
+.ax-dialogo--aviso { --_tono: var(--ax-warning-500); }
+.ax-dialogo--info { --_tono: var(--ax-accent); }
+
+.ax-dialogo__cuerpo {
+  display: flex;
+  gap: var(--ax-space-4);
+  padding: var(--ax-space-6) var(--ax-space-6) var(--ax-space-5);
+}
+.ax-dialogo__icono {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: var(--_tono);
+  background: color-mix(in oklab, var(--_tono) 14%, transparent);
+  box-shadow: 0 0 0 6px color-mix(in oklab, var(--_tono) 7%, transparent);
+}
+.ax-dialogo__icono svg {
+  width: 22px;
+  height: 22px;
+}
+.ax-dialogo__texto {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.ax-dialogo__titulo {
+  margin: 2px 0 0;
+  font-family: var(--ax-font-display);
+  font-size: var(--ax-text-lg);
+  font-weight: var(--ax-weight-semibold);
+  line-height: 1.3;
+  color: var(--ax-text-strong);
+}
+.ax-dialogo__mensaje {
+  margin-top: var(--ax-space-2);
+  font-size: var(--ax-text-sm);
+  line-height: 1.55;
+  color: var(--ax-text-muted);
+}
+.ax-dialogo__mensaje p {
+  margin: 0 0 var(--ax-space-2);
+}
+.ax-dialogo__acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--ax-space-2);
+  padding: var(--ax-space-4) var(--ax-space-6);
+  border-top: 1px solid var(--ax-border);
+  background: var(--ax-fill-hover);
+}
+
+@keyframes ax-dialogo-fundido {
+  from { opacity: 0; }
+}
+@keyframes ax-dialogo-entrada {
+  from { opacity: 0; transform: translateY(8px) scale(0.97); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ax-dialogo__fondo,
+  .ax-dialogo__caja { animation: none; }
+}
+
+@media (max-width: 480px) {
+  .ax-dialogo {
+    align-items: flex-end;
+    padding: var(--ax-space-3);
+  }
+  .ax-dialogo__cuerpo {
+    padding: var(--ax-space-5) var(--ax-space-4) var(--ax-space-4);
+  }
+  .ax-dialogo__acciones {
+    flex-direction: column-reverse;
+    padding: var(--ax-space-3) var(--ax-space-4);
+  }
+  .ax-dialogo__acciones .ax-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

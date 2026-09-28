@@ -28,6 +28,7 @@ import type { ReactNode } from 'react';
 import Script from 'next/script';
 import { CustomizerProvider } from '../src/context/CustomizerContext';
 import { AuthProvider } from '../src/context/AuthContext';
+import { DialogoProvider } from '../src/components/ui/Dialogo';
 import '../src/styles/app.css';
 
 /* The anti-flash IIFE. MUST run before the stylesheet and before React. Kept
@@ -102,7 +103,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body>
         <AuthProvider>
-          <CustomizerProvider>{children}</CustomizerProvider>
+          <CustomizerProvider>
+            <DialogoProvider>{children}</DialogoProvider>
+          </CustomizerProvider>
         </AuthProvider>
       </body>
     </html>

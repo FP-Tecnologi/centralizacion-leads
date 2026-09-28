@@ -12,6 +12,7 @@ import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { PageHead } from '../components/shell/PageHead';
+import { useDialogo } from '../components/ui/Dialogo';
 import { FiltrosPanel } from '../components/leads/FiltrosPanel';
 import { ChipsFiltros } from '../components/leads/ChipsFiltros';
 import { listarColumnasExtra, listarFuentes, listarLeads, todosLosLeads, type ColumnaExtra, type Fuente, type Orden } from '../lib/leads/datos';
@@ -271,6 +272,7 @@ function NuevaAplicacionModal({ fuentes, onCerrar, onCreada }: { fuentes: Fuente
 // Tab 2: Aplicaciones conectadas (admin)
 // ---------------------------------------------------------------------------
 function AplicacionesTab({ fuentes }: { fuentes: Fuente[] }) {
+  const { confirmar } = useDialogo();
   const [apps, setApps] = useState<Aplicacion[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -300,7 +302,13 @@ function AplicacionesTab({ fuentes }: { fuentes: Fuente[] }) {
   };
 
   const regenerarClave = async (a: Aplicacion) => {
-    if (!window.confirm(`Las integraciones que usen la clave anterior de "${a.nombre}" dejarán de funcionar. ¿Continuar?`)) return;
+    const ok = await confirmar({
+      titulo: `¿Regenerar la clave de "${a.nombre}"?`,
+      mensaje: 'Las integraciones que usan la clave actual dejarán de funcionar hasta que pongas la nueva.',
+      confirmarTexto: 'Regenerar clave',
+      tono: 'aviso',
+    });
+    if (!ok) return;
     setClaveRegenerada(null);
     setRegenerandoId(a.id);
     try {
@@ -315,7 +323,13 @@ function AplicacionesTab({ fuentes }: { fuentes: Fuente[] }) {
   };
 
   const eliminar = async (a: Aplicacion) => {
-    if (!window.confirm(`¿Eliminar la aplicación "${a.nombre}"? Esta acción no se puede deshacer.`)) return;
+    const ok = await confirmar({
+      titulo: `¿Eliminar la aplicación "${a.nombre}"?`,
+      mensaje: 'Dejará de poder leer leads con su clave. Esta acción no se puede deshacer.',
+      confirmarTexto: 'Eliminar',
+      tono: 'peligro',
+    });
+    if (!ok) return;
     const { error: err } = await supabase.from('aplicaciones').delete().eq('id', a.id);
     if (err) { setError('No se pudo eliminar la aplicación.'); return; }
     setApps((prev) => prev.filter((x) => x.id !== a.id));

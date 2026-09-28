@@ -22,6 +22,7 @@
 @import './utilities.css'; /* token-driven helpers */
 @import './importar.css'; /* asistente de importación de leads */
 @import './leads-table.css'; /* cabecera y barra de la tabla de leads */
+@import './dialogo.css'; /* confirmaciones con el diseño del sistema (no window.confirm) */
 
 /* ── Surface schemes (sidebar/header chrome) ── */
 @import './schemes.css';

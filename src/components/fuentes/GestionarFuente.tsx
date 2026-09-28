@@ -19,9 +19,11 @@ import type { CampoFormulario } from '../../../supabase/functions/_shared/lead';
 import { CamposEditor } from './CamposEditor';
 import { paginaDeFuente, type PaginaGuardada } from '../../lib/landings/datos';
 import { PageHead } from '../shell/PageHead';
+import { useDialogo } from '../ui/Dialogo';
 
 export function GestionarFuente({ slug, tipo }: { slug: string; tipo: 'landing' | 'offline' }) {
   const { esAdmin } = useAuth();
+  const { confirmar } = useDialogo();
   const base = tipo === 'landing' ? 'landings' : 'offline';
 
   const [f, setF] = useState<Fuente | null | undefined>(undefined);
@@ -109,7 +111,20 @@ export function GestionarFuente({ slug, tipo }: { slug: string; tipo: 'landing' 
   };
 
   const regenerarClave = async () => {
-    if (!window.confirm('Las landings que usen la clave anterior dejarán de enviar datos. ¿Continuar?')) return;
+    const ok = await confirmar(f.clave_hash
+      ? {
+        titulo: '¿Regenerar la clave de conexión?',
+        mensaje: 'Las páginas externas que usan la clave actual dejarán de enviar leads hasta que pongas la nueva.',
+        confirmarTexto: 'Regenerar clave',
+        tono: 'aviso',
+      }
+      : {
+        titulo: 'Generar clave de conexión',
+        mensaje: 'Se mostrará una sola vez: cópiala y guárdala en la página externa que enviará los leads.',
+        confirmarTexto: 'Generar clave',
+        tono: 'info',
+      });
+    if (!ok) return;
     setErrorClave(null);
     setRegenerando(true);
     try {

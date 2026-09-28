@@ -6,6 +6,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import { useDialogo } from '../ui/Dialogo';
 import { supabase } from '../../lib/supabase';
 import { ESTADOS, type ColumnaExtra, type Fuente } from '../../lib/leads/datos';
 import { FILTRO_VACIO, OPERADORES, type Condicion, type FiltroLeads, type Operador } from '../../lib/leads/filtros';
@@ -65,6 +66,7 @@ export function FiltrosPanel({
   const [borrador, setBorrador] = useState<FiltroLeads>(filtro);
   const [misFiltros, setMisFiltros] = useState<FilaGuardada[]>([]);
   const [errorGuardados, setErrorGuardados] = useState<string | null>(null);
+  const { confirmar, pedirTexto } = useDialogo();
   const ref = useRef<HTMLDivElement>(null);
   useFocusTrap(ref, abierto);
 
@@ -111,7 +113,12 @@ export function FiltrosPanel({
   const guardarActual = async () => {
     setErrorGuardados(null);
     try {
-      const nombre = window.prompt('Nombre del filtro');
+      const nombre = await pedirTexto({
+        titulo: 'Guardar filtro',
+        mensaje: 'Podrás volver a aplicarlo desde "Mis filtros".',
+        etiqueta: 'Nombre del filtro',
+        placeholder: 'Ej.: EXPOMINA sin contactar',
+      });
       if (!nombre) return;
       const { data, error } = await supabase.from('filtros_guardados').insert({ nombre, definicion: borrador }).select('id,nombre,definicion').single();
       if (error) throw error;
@@ -123,7 +130,13 @@ export function FiltrosPanel({
   const borrarGuardado = async (id: string) => {
     setErrorGuardados(null);
     try {
-      if (!window.confirm('¿Borrar este filtro guardado?')) return;
+      const nombre = misFiltros.find((f) => f.id === id)?.nombre;
+      const ok = await confirmar({
+        titulo: `¿Borrar el filtro${nombre ? ` "${nombre}"` : ''}?`,
+        confirmarTexto: 'Borrar',
+        tono: 'peligro',
+      });
+      if (!ok) return;
       const { error } = await supabase.from('filtros_guardados').delete().eq('id', id);
       if (error) throw error;
       setMisFiltros((prev) => prev.filter((f) => f.id !== id));
