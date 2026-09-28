@@ -11,7 +11,8 @@ import type { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { setRecordar } from '../lib/authStorage';
 
-export interface Perfil { user_id: string; nombre: string; rol: 'admin' | 'editor' | 'lector' }
+export type Rol = 'superadmin' | 'admin' | 'editor' | 'lector';
+export interface Perfil { user_id: string; nombre: string; rol: Rol }
 
 interface AuthValue {
   user: User | null;
@@ -26,7 +27,9 @@ interface AuthValue {
   crearClave(password: string): Promise<void>;
   logout(): Promise<void>;
   puedeEditar: boolean;
+  /** superadmin o admin: ven y configuran todas las fuentes. */
   esAdmin: boolean;
+  esSuperadmin: boolean;
 }
 
 const Ctx = createContext<AuthValue | null>(null);
@@ -120,8 +123,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthValue>(() => ({
     user, perfil, aal2, loading, login, tieneTotp, verificarTotp, iniciarActivacion, confirmarActivacion, crearClave, logout,
-    puedeEditar: perfil?.rol === 'admin' || perfil?.rol === 'editor',
-    esAdmin: perfil?.rol === 'admin',
+    puedeEditar: perfil?.rol === 'superadmin' || perfil?.rol === 'admin' || perfil?.rol === 'editor',
+    esAdmin: perfil?.rol === 'superadmin' || perfil?.rol === 'admin',
+    esSuperadmin: perfil?.rol === 'superadmin',
   }), [user, perfil, aal2, loading, login, tieneTotp, verificarTotp, iniciarActivacion, confirmarActivacion, crearClave, logout]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

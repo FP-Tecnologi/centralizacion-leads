@@ -5,7 +5,7 @@
  * Indicador de pasos con ax-tabs__tab (sin puerto del stepper circular de Vireo:
  * ese wizard trae validación de formulario multi-campo que no aplica aquí).
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { PageHead } from '../components/shell/PageHead';
@@ -24,17 +24,25 @@ import { NUCLEO } from '../../supabase/functions/_shared/lead';
 const COLS_DIRECTAS = [...NUCLEO, ...CAMPOS_IMPORTACION] as string[];
 const LOTE = 500;
 
-interface ImportacionHist { id: string; archivo: string; nuevas: number; actualizadas: number; errores: number; creado_en: string }
 interface ResultadoImport { nuevas: number; actualizadas: number; erroresServidor: { fila: number; motivo: string }[] }
 type Destino = 'directo' | 'existente' | 'nueva' | 'ignorar';
-const TEXTO_DESTINO: Record<Destino, string> = {
-  directo: 'Campo del lead', existente: 'Columna adicional existente', nueva: 'Se crea columna adicional', ignorar: 'No se guarda',
-};
-const CLASE_DESTINO: Record<Destino, string> = {
-  directo: 'ax-badge--success', existente: 'ax-badge--info', nueva: 'ax-badge--accent', ignorar: 'ax-badge--neutral',
-};
 
-const PASOS = ['Archivo y fuente', 'Mapear columnas', 'Vista previa y confirmar'];
+const PASOS = [
+  { titulo: 'Archivo y fuente', ayuda: 'Sube el Excel o CSV' },
+  { titulo: 'Mapear columnas', ayuda: 'Dónde va cada columna' },
+  { titulo: 'Revisar e importar', ayuda: 'Vista previa y confirmar' },
+];
+
+const tamano = (bytes: number) =>
+  bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+
+const ICONO = {
+  subir: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z" /><path d="M12 11v6" /><path d="M9.5 13.5l2.5 -2.5l2.5 2.5" /></svg>,
+  excel: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z" /><path d="M10 12l4 5" /><path d="M10 17l4 -5" /></svg>,
+  check: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5l10 -10" /></svg>,
+  alerta: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 9v4" /><path d="M12 17h.01" /><path d="M10.24 3.957l-8.422 14.06a1.989 1.989 0 0 0 1.7 2.983h16.845a1.989 1.989 0 0 0 1.7 -2.983l-8.423 -14.06a1.989 1.989 0 0 0 -3.4 0z" /></svg>,
+  descargar: <svg className="ax-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2" /><path d="M7 11l5 5l5 -5" /><path d="M12 4l0 12" /></svg>,
+};
 
 export function Importar() {
   const { esAdmin, puedeEditar } = useAuth();
@@ -55,6 +63,9 @@ export function Importar() {
   const [errorArchivo, setErrorArchivo] = useState<string | null>(null);
   const [errorFuente, setErrorFuente] = useState<string | null>(null);
   const [leyendo, setLeyendo] = useState(false);
+  const [arrastrando, setArrastrando] = useState(false);
+  const [creandoFuente, setCreandoFuente] = useState(false);
+  const inputArchivo = useRef<HTMLInputElement>(null);
 
   // Paso 2
   const [mapeo, setMapeo] = useState<Mapeo>({});
@@ -67,7 +78,6 @@ export function Importar() {
   const [progreso, setProgreso] = useState(0);
   const [resultado, setResultado] = useState<ResultadoImport | null>(null);
   const [errorImportar, setErrorImportar] = useState<string | null>(null);
-  const [historial, setHistorial] = useState<ImportacionHist[]>([]);
 
   const fuente = useMemo(() => fuentes.find((f) => f.id === fuenteId), [fuentes, fuenteId]);
 
@@ -115,6 +125,28 @@ export function Importar() {
       setErrorArchivo('No se pudo leer el archivo. Verifica que sea .xlsx, .xls o .csv.');
     } finally {
       setLeyendo(false);
+    }
+  };
+
+  const quitarArchivo = () => {
+    if (inputArchivo.current) inputArchivo.current.value = '';
+    onArchivo(null);
+  };
+
+  const crearFuenteNueva = async () => {
+    if (!nombreNueva.trim()) return;
+    setErrorFuente(null);
+    setCreandoFuente(true);
+    try {
+      const nueva = await guardarFuente({ nombre: nombreNueva.trim(), slug: slugify(nombreNueva), tipo: 'importacion', campos: [] });
+      setFuentes((fs) => [...fs, nueva]);
+      setFuenteId(nueva.id);
+      setCrearNueva(false);
+      setNombreNueva('');
+    } catch {
+      setErrorFuente('No se pudo crear la fuente. Verifica que el nombre no esté repetido.');
+    } finally {
+      setCreandoFuente(false);
     }
   };
 
@@ -243,16 +275,6 @@ export function Importar() {
     irA(2);
   };
 
-  const cargarHistorial = async (fid: string) => {
-    const { data } = await supabase
-      .from('importaciones')
-      .select('id, archivo, nuevas, actualizadas, errores, creado_en')
-      .eq('fuente_id', fid)
-      .order('creado_en', { ascending: false })
-      .limit(10);
-    setHistorial((data ?? []) as ImportacionHist[]);
-  };
-
   const importar = async () => {
     if (!construido || !archivo || !fuenteId) return;
     setImportando(true);
@@ -296,12 +318,10 @@ export function Importar() {
             + `falló el lote ${loteActual} (filas ${desde}–${hasta}): ${msg}`,
           );
           setResultado({ nuevas, actualizadas, erroresServidor });
-          cargarHistorial(fuenteId);
           return;
         }
       }
       setResultado({ nuevas, actualizadas, erroresServidor });
-      cargarHistorial(fuenteId);
     } finally {
       setImportando(false);
     }
@@ -333,329 +353,291 @@ export function Importar() {
     for (const { lead } of construido.filas) for (const k of Object.keys(lead)) presentes.add(k);
     return COLS_DIRECTAS.filter((k) => presentes.has(k));
   }, [construido]);
-  const labelExtra = (k: string) => columnasExtra.find((c) => c.key === k)?.label ?? k;
-
-  // mismo correo y mismo evento dentro del archivo: se guardan como un solo lead (la fila de
-  // más abajo completa a la anterior), así que "nuevas" puede salir menor que el total. El
-  // mismo correo en otro evento es otro lead y no cuenta acá.
-  const repetidos = useMemo(() => {
-    if (!construido) return 0;
-    const vistos = new Set<string>();
-    let n = 0;
-    for (const { lead } of construido.filas) {
-      const correo = typeof lead.email === 'string' ? lead.email : '';
-      if (!correo) continue;
-      const e = `${correo}|${typeof lead.evento === 'string' ? lead.evento : ''}`;
-      if (vistos.has(e)) n += 1; else vistos.add(e);
-    }
-    return n;
-  }, [construido]);
 
   if (!puedeEditar) {
     return (
       <>
         <PageHead title="Importar leads" />
-        <p className="ax-card__subtitle">No tienes permiso para importar leads.</p>
+        <div className="ax-card"><div className="ax-card__body"><p className="imp-muted">No tienes permiso para importar leads.</p></div></div>
       </>
     );
   }
 
   const totalObservadas = construido?.observadas.length ?? 0;
+  const ignoradas = encabezados.filter((h) => !mapeo[h]).length;
+  const parcial = !!errorImportar || (resultado?.erroresServidor.length ?? 0) > 0;
 
   return (
     <>
-      <PageHead title="Importar leads" subtitle="Excel (.xlsx, .xls) o CSV. Ninguna fila se descarta: lo incompleto se importa marcado para revisar." />
+      <PageHead title="Importar leads" subtitle="Sube un Excel o CSV en 3 pasos." />
 
       <div className="ax-card ax-col--12">
-        <div className="ax-tabs ax-tabs--pill" style={{ padding: 'var(--ax-space-4) var(--ax-space-5) 0' }}>
-          <div className="ax-tabs__list" role="tablist" aria-label="Pasos de importación">
-            {PASOS.map((p, i) => (
+        <ol className="imp-steps" aria-label="Pasos de importación">
+          {PASOS.map((p, i) => (
+            <li key={p.titulo} className={`${paso === i ? 'is-active' : ''}${i < paso ? ' is-done' : ''}`}>
               <button
-                key={p}
                 type="button"
-                role="tab"
-                aria-selected={paso === i}
-                className={`ax-tabs__tab${paso === i ? ' is-active' : ''}`}
-                disabled={i > maxPaso}
+                className="imp-step"
+                aria-current={paso === i ? 'step' : undefined}
+                disabled={i > maxPaso || importando || !!resultado}
                 onClick={() => i <= maxPaso && setPaso(i)}
               >
-                {i + 1}. {p}
+                <span className="imp-step__num">{i < paso ? ICONO.check : i + 1}</span>
+                <span className="imp-step__text">
+                  <span className="imp-step__title">{p.titulo}</span>
+                  <span className="imp-step__hint">{p.ayuda}</span>
+                </span>
               </button>
-            ))}
-          </div>
-        </div>
+            </li>
+          ))}
+        </ol>
 
-        <div className="ax-card__body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--ax-space-4)' }}>
-          {paso === 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--ax-space-4)', maxWidth: 560 }}>
-              <div className="ax-field">
-                <label className="ax-label" htmlFor="imp-archivo">Archivo</label>
-                <input
-                  id="imp-archivo"
-                  type="file"
-                  accept=".xlsx,.xls,.csv"
-                  className="ax-input"
-                  onChange={(e) => onArchivo(e.target.files?.[0] ?? null)}
-                />
-                {leyendo && <p className="ax-card__subtitle">Leyendo archivo…</p>}
-                {errorArchivo && <p role="alert" style={{ color: 'var(--ax-danger-500)' }}>{errorArchivo}</p>}
-                {!errorArchivo && !!filasArchivo.length && (
-                  <p className="ax-card__subtitle ax-num">{filasArchivo.length} filas detectadas, {encabezados.length} columnas.</p>
-                )}
-              </div>
-
-              <div className="ax-field">
-                <label className="ax-label" htmlFor="imp-fuente">Fuente destino</label>
-                {!crearNueva ? (
-                  <select
-                    id="imp-fuente"
-                    className="ax-select"
-                    value={fuenteId}
-                    onChange={(e) => setFuenteId(e.target.value)}
-                    disabled={cargandoFuentes}
+        {paso === 0 && (
+          <div className="imp-body">
+            <div className="imp-grid">
+              <div className="imp-stack">
+                <span className="ax-label">Archivo</span>
+                {!archivo ? (
+                  <label
+                    className={`imp-drop${arrastrando ? ' is-over' : ''}`}
+                    onDragOver={(e) => { e.preventDefault(); setArrastrando(true); }}
+                    onDragLeave={() => setArrastrando(false)}
+                    onDrop={(e) => { e.preventDefault(); setArrastrando(false); onArchivo(e.dataTransfer.files?.[0] ?? null); }}
                   >
-                    <option value="">Selecciona una fuente…</option>
-                    {fuentes.map((f) => <option key={f.id} value={f.id}>{f.nombre}</option>)}
-                  </select>
+                    <input
+                      ref={inputArchivo}
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      aria-label="Elegir archivo para importar"
+                      onChange={(e) => onArchivo(e.target.files?.[0] ?? null)}
+                    />
+                    <span className="imp-drop__icon">{ICONO.subir}</span>
+                    <p className="imp-drop__title">Arrastra tu archivo aquí</p>
+                    <span className="ax-btn ax-btn--secondary ax-btn--sm" aria-hidden="true">Seleccionar archivo</span>
+                    <p className="imp-muted">Excel (.xlsx, .xls) o CSV</p>
+                  </label>
                 ) : (
-                  <input
-                    className="ax-input"
-                    placeholder="Nombre de la nueva fuente"
-                    value={nombreNueva}
-                    onChange={(e) => setNombreNueva(e.target.value)}
-                  />
+                  <div className={`imp-file${errorArchivo ? ' is-error' : ''}`}>
+                    <span className="imp-file__icon">{ICONO.excel}</span>
+                    <div className="imp-file__info">
+                      <p className="imp-file__name" title={archivo.name}>{archivo.name}</p>
+                      <p className="imp-file__meta">
+                        {leyendo ? 'Leyendo archivo…' : errorArchivo ? 'No se pudo leer' : `${filasArchivo.length} filas · ${tamano(archivo.size)}`}
+                      </p>
+                    </div>
+                    <button type="button" className="ax-btn ax-btn--ghost ax-btn--sm" onClick={quitarArchivo}>Cambiar</button>
+                  </div>
                 )}
-                {errorFuente && <p role="alert" style={{ color: 'var(--ax-danger-500)' }}>{errorFuente}</p>}
-                {esAdmin && (
-                  <button
-                    type="button"
-                    className="ax-btn ax-btn--link ax-btn--sm"
-                    style={{ marginTop: 'var(--ax-space-2)' }}
-                    onClick={async () => {
-                      if (!crearNueva) { setCrearNueva(true); setErrorFuente(null); return; }
-                      if (!nombreNueva.trim()) return;
-                      setErrorFuente(null);
-                      try {
-                        const nueva = await guardarFuente({
-                          nombre: nombreNueva.trim(), slug: slugify(nombreNueva), tipo: 'importacion', campos: [],
-                        });
-                        setFuentes((fs) => [...fs, nueva]);
-                        setFuenteId(nueva.id);
-                        setCrearNueva(false);
-                        setNombreNueva('');
-                      } catch {
-                        setErrorFuente('No se pudo crear la fuente. Verifica que el nombre no esté repetido.');
-                      }
-                    }}
-                  >
-                    {crearNueva ? 'Guardar fuente nueva' : 'Crear fuente de importación nueva'}
-                  </button>
-                )}
+                {errorArchivo && <p role="alert" className="imp-msg imp-msg--danger">{errorArchivo}</p>}
               </div>
 
-              <div>
-                <button
-                  type="button"
-                  className="ax-btn ax-btn--primary"
-                  disabled={!fuente || !filasArchivo.length || !!errorArchivo}
-                  onClick={avanzarAMapeo}
-                >
+              <div className="imp-stack">
+                {!crearNueva ? (
+                  <div className="ax-field">
+                    <label className="ax-label" htmlFor="imp-fuente">Fuente destino</label>
+                    <select id="imp-fuente" className="ax-select" value={fuenteId} onChange={(e) => setFuenteId(e.target.value)} disabled={cargandoFuentes}>
+                      <option value="">{cargandoFuentes ? 'Cargando…' : 'Selecciona una fuente'}</option>
+                      {fuentes.map((f) => <option key={f.id} value={f.id}>{f.nombre}</option>)}
+                    </select>
+                    <p className="imp-muted" style={{ marginTop: 'var(--ax-space-1)' }}>
+                      Landing o evento al que pertenecen los leads.
+                      {esAdmin && (
+                        <>
+                          {' '}
+                          <button type="button" className="imp-link" onClick={() => { setCrearNueva(true); setErrorFuente(null); }}>Crear nueva</button>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                ) : (
+                  <form className="ax-field" onSubmit={(e) => { e.preventDefault(); crearFuenteNueva(); }}>
+                    <label className="ax-label" htmlFor="imp-nueva">Nombre de la nueva fuente</label>
+                    <input id="imp-nueva" className="ax-input" placeholder="Ej.: Feria Minera 2026" value={nombreNueva}
+                      onChange={(e) => setNombreNueva(e.target.value)} autoFocus />
+                    <div className="ax-cluster" style={{ gap: 'var(--ax-space-2)', marginTop: 'var(--ax-space-2)' }}>
+                      <button type="submit" className="ax-btn ax-btn--primary ax-btn--sm" disabled={!nombreNueva.trim() || creandoFuente}>
+                        {creandoFuente ? 'Creando…' : 'Crear'}
+                      </button>
+                      <button type="button" className="ax-btn ax-btn--ghost ax-btn--sm" onClick={() => { setCrearNueva(false); setNombreNueva(''); setErrorFuente(null); }}>
+                        Cancelar
+                      </button>
+                    </div>
+                  </form>
+                )}
+                {errorFuente && <p role="alert" className="imp-msg imp-msg--danger">{errorFuente}</p>}
+              </div>
+            </div>
+
+            <div className="imp-actions">
+              <div className="imp-actions__end">
+                <button type="button" className="ax-btn ax-btn--primary" disabled={!fuente || !filasArchivo.length || !!errorArchivo || leyendo} onClick={avanzarAMapeo}>
                   Continuar
                 </button>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {paso === 1 && fuente && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--ax-space-4)' }}>
-              <p className="ax-card__subtitle" style={{ margin: 0 }}>
-                Cada columna del archivo se guarda en el campo que elijas. Las que no corresponden a un
-                campo del lead (p.ej. &quot;Necesidad detectada&quot;) se guardan como <b>columna adicional</b>:
-                se crea una sola vez y queda disponible en la tabla, los filtros y la exportación de todas
-                las fuentes. Elige &quot;— Ignorar —&quot; si no quieres guardarla.
-              </p>
-              <div className="ax-table-wrap">
-                <table className="ax-table">
-                  <thead className="ax-table__head">
-                    <tr>
-                      <th className="ax-table__th" scope="col">Columna del archivo</th>
-                      <th className="ax-table__th" scope="col">Ejemplo</th>
-                      <th className="ax-table__th" scope="col">Guardar como</th>
-                      <th className="ax-table__th" scope="col">Qué pasa</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {encabezados.map((h) => {
-                      // ejemplo: primer valor no vacío de la columna (la primera fila suele venir incompleta).
-                      const ejemplo = filasArchivo.find((f) => String(f.datos[h] ?? '').trim() !== '')?.datos[h];
-                      const tipo = tipoDestino(mapeo[h]);
-                      return (
-                        <tr key={h} className="ax-table__row">
-                          <td className="ax-table__td">{h}</td>
-                          <td className="ax-table__td">{String(ejemplo ?? '')}</td>
-                          <td className="ax-table__td">
-                            <select
-                              className="ax-select ax-select--sm"
-                              value={mapeo[h] ?? ''}
-                              onChange={(e) => setMapeo((m) => ({ ...m, [h]: e.target.value || null }))}
-                              aria-label={`Guardar "${h}" como`}
-                            >
-                              {opcionesMapeo(h).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                            </select>
-                          </td>
-                          <td className="ax-table__td">
-                            <span className={`ax-badge ax-badge--soft ax-badge--pill ax-badge--sm ${CLASE_DESTINO[tipo]}`}>{TEXTO_DESTINO[tipo]}</span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+        {paso === 1 && fuente && (
+          <div className="imp-body">
+            <p className="imp-muted">
+              Revisa dónde se guarda cada columna. Ya lo sugerimos por ti; cambia solo lo que no esté bien.
+              {ignoradas > 0 && <> <b>{ignoradas}</b> columna{ignoradas === 1 ? '' : 's'} no se guardará{ignoradas === 1 ? '' : 'n'}.</>}
+            </p>
+
+            <div className="imp-map" role="table" aria-label="Columnas del archivo">
+              <div className="imp-map__row imp-map__head" role="row">
+                <span role="columnheader">Columna del archivo</span>
+                <span role="columnheader">Ejemplo</span>
+                <span role="columnheader">Se guarda en</span>
               </div>
-              {errorMapeo && <p role="alert" style={{ color: 'var(--ax-danger-500)' }}>{errorMapeo}</p>}
-              <div className="ax-cluster" style={{ gap: 'var(--ax-space-2)' }}>
-                <button type="button" className="ax-btn ax-btn--secondary" onClick={() => setPaso(0)}>Atrás</button>
-                <button type="button" className="ax-btn ax-btn--primary" disabled={guardandoMapeo} onClick={confirmarMapeo}>
-                  {guardandoMapeo ? 'Registrando columnas…' : 'Continuar'}
+              {encabezados.map((h) => {
+                // ejemplo: primer valor no vacío de la columna (la primera fila suele venir incompleta).
+                const ejemplo = filasArchivo.find((f) => String(f.datos[h] ?? '').trim() !== '')?.datos[h];
+                const tipo = tipoDestino(mapeo[h]);
+                return (
+                  <div key={h} className={`imp-map__row${tipo === 'ignorar' ? ' is-ignored' : ''}`} role="row">
+                    <span className="imp-map__col" role="cell">
+                      {h}
+                      {tipo === 'nueva' && <span className="ax-badge ax-badge--soft ax-badge--pill ax-badge--sm ax-badge--accent imp-map__new">nueva</span>}
+                    </span>
+                    <span className="imp-map__sample" role="cell" title={String(ejemplo ?? '')}>
+                      {ejemplo !== undefined && String(ejemplo) !== '' ? String(ejemplo) : <i>vacía</i>}
+                    </span>
+                    <span className="imp-map__field" role="cell">
+                      <select
+                        className="ax-select ax-select--sm"
+                        value={mapeo[h] ?? ''}
+                        onChange={(e) => setMapeo((m) => ({ ...m, [h]: e.target.value || null }))}
+                        aria-label={`Guardar "${h}" en`}
+                      >
+                        {opcionesMapeo(h).map((o) => <option key={o.value} value={o.value}>{o.value ? o.label : 'No guardar'}</option>)}
+                      </select>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {errorMapeo && <p role="alert" className="imp-msg imp-msg--warning">{errorMapeo}</p>}
+
+            <div className="imp-actions">
+              <button type="button" className="ax-btn ax-btn--secondary" onClick={() => setPaso(0)}>Atrás</button>
+              <div className="imp-actions__end">
+                <button type="button" className="ax-btn ax-btn--primary" disabled={guardandoMapeo || ignoradas === encabezados.length} onClick={confirmarMapeo}>
+                  {guardandoMapeo ? 'Preparando…' : 'Continuar'}
                 </button>
               </div>
             </div>
-          )}
+          </div>
+        )}
 
-          {paso === 2 && construido && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--ax-space-4)' }}>
-              {!resultado && (
-                <>
-                  <p className="ax-num">
-                    <b style={{ color: 'var(--ax-success-500)' }}>{construido.filas.length} filas se importarán</b>
-                    {totalObservadas > 0 && <>, de ellas <b style={{ color: 'var(--ax-warning-500)' }}>{totalObservadas} con datos a revisar</b></>}
-                  </p>
-                  {repetidos > 0 && (
-                    <p className="ax-card__subtitle" style={{ margin: 0 }}>
-                      {repetidos} fila{repetidos === 1 ? ' repite' : 's repiten'} un correo de otra fila del archivo: se
-                      guardan como un solo lead (la fila de más abajo completa a la anterior).
-                    </p>
-                  )}
+        {paso === 2 && construido && (
+          <div className="imp-body">
+            {!resultado && (
+              <>
+                <div className="imp-stats">
+                  <div className="imp-stat imp-stat--accent">
+                    <span className="imp-stat__value">{construido.filas.length}</span>
+                    <span className="imp-stat__label">leads a importar</span>
+                  </div>
+                  <div className={`imp-stat ${totalObservadas ? 'imp-stat--warning' : 'imp-stat--success'}`}>
+                    <span className="imp-stat__value">{totalObservadas}</span>
+                    <span className="imp-stat__label">con datos a revisar</span>
+                  </div>
+                </div>
 
-                  {!!construido.filas.length && (
-                    <div className="ax-table-wrap">
+                {totalObservadas > 0 && (
+                  <div className="imp-msg imp-msg--warning imp-msg--row">
+                    <span>Se importan igual y quedan marcados en la tabla para que los corrijas.</span>
+                    <button type="button" className="ax-btn ax-btn--secondary ax-btn--sm" onClick={descargarFallas}>
+                      {ICONO.descargar}<span>Ver detalle (Excel)</span>
+                    </button>
+                  </div>
+                )}
+
+                {!!construido.filas.length && (
+                  <div className="imp-stack">
+                    <span className="ax-label">Vista previa{construido.filas.length > 10 ? ' (primeras 10 filas)' : ''}</span>
+                    <div className="imp-preview">
                       <table className="ax-table">
                         <thead className="ax-table__head">
                           <tr>
                             <th className="ax-table__th" scope="col">Fila</th>
                             {colsPreview.map((k) => <th key={k} className="ax-table__th" scope="col">{LABEL_DESTINO[k] ?? k}</th>)}
-                            <th className="ax-table__th" scope="col">Columnas adicionales</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {construido.filas.slice(0, 20).map(({ fila, lead }) => {
+                          {construido.filas.slice(0, 10).map(({ fila, lead }) => {
                             const marcas = (lead.invalidos ?? {}) as Record<string, MarcaInvalido>;
                             return (
-                            <tr key={fila} className="ax-table__row">
-                              <td className="ax-table__td ax-num">{fila}</td>
-                              {colsPreview.map((k) => (
-                                <td key={k} className="ax-table__td">
-                                  <CeldaMarcada valor={String((lead as unknown as Record<string, unknown>)[k] ?? '')} marca={marcas[k]} />
-                                </td>
-                              ))}
-                              <td className="ax-table__td">{Object.entries(lead.extra).map(([k, v]) => `${labelExtra(k)}: ${v}`).join(' · ')}</td>
-                            </tr>
+                              <tr key={fila} className="ax-table__row">
+                                <td className="ax-table__td ax-num">{fila}</td>
+                                {colsPreview.map((k) => (
+                                  <td key={k} className="ax-table__td">
+                                    <CeldaMarcada valor={String((lead as unknown as Record<string, unknown>)[k] ?? '')} marca={marcas[k]} />
+                                  </td>
+                                ))}
+                              </tr>
                             );
                           })}
                         </tbody>
                       </table>
                     </div>
-                  )}
-                  {construido.filas.length > 20 && (
-                    <p className="ax-card__subtitle" style={{ margin: 0 }}>Vista previa de las primeras 20 filas.</p>
-                  )}
+                  </div>
+                )}
 
-                  {!!construido.observadas.length && (
-                    <div>
-                      <div className="ax-cluster" style={{ justifyContent: 'space-between' }}>
-                        <h3 className="ax-card__title" style={{ fontSize: 'var(--ax-text-md)' }}>Filas con datos a revisar (se importan marcadas)</h3>
-                        <button type="button" className="ax-btn ax-btn--secondary ax-btn--sm" onClick={descargarFallas}>Descargar registro de observaciones (Excel)</button>
-                      </div>
-                      <ul style={{ margin: 0, paddingInlineStart: 'var(--ax-space-5)', fontSize: 'var(--ax-text-sm)' }}>
-                        {construido.observadas.slice(0, 50).map((e) => (
-                          <li key={e.fila}>Fila {e.fila}: {e.causas.join('; ')}</li>
-                        ))}
-                      </ul>
-                      {construido.observadas.length > 50 && (
-                        <p className="ax-card__subtitle">…y {construido.observadas.length - 50} más en el Excel de observaciones.</p>
-                      )}
+                {importando && (
+                  <div className="ax-progress ax-progress--md" role="progressbar" aria-valuemin={0} aria-valuemax={construido.filas.length} aria-valuenow={progreso} aria-label="Progreso de importación">
+                    <div className="ax-progress__track">
+                      <div className="ax-progress__fill" style={{ width: `${construido.filas.length ? (progreso / construido.filas.length) * 100 : 0}%` }} />
                     </div>
-                  )}
+                    <span className="ax-progress__value">{progreso}/{construido.filas.length}</span>
+                  </div>
+                )}
 
-                  <div className="ax-cluster" style={{ gap: 'var(--ax-space-2)' }}>
-                    <button type="button" className="ax-btn ax-btn--secondary" onClick={() => setPaso(1)} disabled={importando}>Atrás</button>
+                <div className="imp-actions">
+                  <button type="button" className="ax-btn ax-btn--secondary" onClick={() => setPaso(1)} disabled={importando}>Atrás</button>
+                  <div className="imp-actions__end">
                     <button type="button" className="ax-btn ax-btn--primary" disabled={!construido.filas.length || importando} onClick={importar}>
-                      {importando ? `Importando… ${progreso}/${construido.filas.length}` : `Importar ${construido.filas.length} filas`}
+                      {importando ? 'Importando…' : `Importar ${construido.filas.length} lead${construido.filas.length === 1 ? '' : 's'}`}
                     </button>
                   </div>
-                </>
-              )}
+                </div>
+              </>
+            )}
 
-              {errorMapeo && <p role="status" style={{ color: 'var(--ax-warning-500)' }}>{errorMapeo}</p>}
-              {errorImportar && <p role="alert" style={{ color: 'var(--ax-danger-500)' }}>{errorImportar}</p>}
+            {errorImportar && <p role="alert" className="imp-msg imp-msg--danger">{errorImportar}</p>}
 
-              {resultado && (
-                <>
-                  <p className="ax-num" style={{ fontSize: 'var(--ax-text-lg)' }}>
-                    {resultado.nuevas} nuevas, {resultado.actualizadas} actualizadas
-                    {totalObservadas > 0 && <>, {totalObservadas} con datos a revisar (marcados en la tabla)</>}
-                    {resultado.erroresServidor.length > 0 && <>, {resultado.erroresServidor.length} no se pudieron guardar</>}
-                  </p>
-                  {!!resultado.erroresServidor.length && (
-                    <ul style={{ margin: 0, paddingInlineStart: 'var(--ax-space-5)', fontSize: 'var(--ax-text-sm)' }}>
-                      {resultado.erroresServidor.map((e, i) => <li key={i}>Fila {e.fila}: {e.motivo}</li>)}
-                    </ul>
-                  )}
-                  {fallas.length > 0 && (
-                    <div>
-                      <button type="button" className="ax-btn ax-btn--secondary ax-btn--sm" onClick={descargarFallas}>
-                        Descargar registro de observaciones (Excel, {fallas.length} fila{fallas.length === 1 ? '' : 's'})
-                      </button>
-                    </div>
-                  )}
+            {resultado && (
+              <>
+                <div className={`imp-result${parcial ? ' imp-result--partial' : ''}`} role="status">
+                  <span className="imp-result__icon">{parcial ? ICONO.alerta : ICONO.check}</span>
                   <div>
-                    <Link href={`/leads?fuente=${fuenteId}`} className="ax-btn ax-btn--primary">Ver en la tabla</Link>
+                    <h3>{parcial ? 'Importación terminada con observaciones' : '¡Importación completada!'}</h3>
+                    <p className="imp-muted">
+                      {resultado.nuevas} nuevo{resultado.nuevas === 1 ? '' : 's'} · {resultado.actualizadas} actualizado{resultado.actualizadas === 1 ? '' : 's'}
+                      {totalObservadas > 0 && <> · {totalObservadas} a revisar</>}
+                      {resultado.erroresServidor.length > 0 && <> · {resultado.erroresServidor.length} sin guardar</>}
+                    </p>
                   </div>
+                </div>
 
-                  {!!historial.length && (
-                    <div>
-                      <h3 className="ax-card__title" style={{ fontSize: 'var(--ax-text-md)' }}>Últimas importaciones de esta fuente</h3>
-                      <div className="ax-table-wrap">
-                        <table className="ax-table">
-                          <thead className="ax-table__head">
-                            <tr>
-                              <th className="ax-table__th" scope="col">Archivo</th>
-                              <th className="ax-table__th" scope="col">Nuevas</th>
-                              <th className="ax-table__th" scope="col">Actualizadas</th>
-                              <th className="ax-table__th" scope="col">Errores</th>
-                              <th className="ax-table__th" scope="col">Fecha</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {historial.map((h) => (
-                              <tr key={h.id} className="ax-table__row">
-                                <td className="ax-table__td">{h.archivo}</td>
-                                <td className="ax-table__td">{h.nuevas}</td>
-                                <td className="ax-table__td">{h.actualizadas}</td>
-                                <td className="ax-table__td">{h.errores}</td>
-                                <td className="ax-table__td">{new Date(h.creado_en).toLocaleString('es-PE')}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-        </div>
+                <div className="imp-actions">
+                  <button type="button" className="ax-btn ax-btn--ghost" onClick={quitarArchivo}>Importar otro archivo</button>
+                  <div className="imp-actions__end">
+                    {fallas.length > 0 && (
+                      <button type="button" className="ax-btn ax-btn--secondary" onClick={descargarFallas}>
+                        {ICONO.descargar}<span>Descargar observaciones</span>
+                      </button>
+                    )}
+                    <Link href={`/leads?fuente=${fuenteId}`} className="ax-btn ax-btn--primary">Ver leads</Link>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
     </>
   );

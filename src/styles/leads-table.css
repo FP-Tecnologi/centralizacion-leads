@@ -1,0 +1,84 @@
+/*
+ * Sistema de Leads — cabecera de la tabla de leads (components/leads/LeadsTable.tsx):
+ * título + total arriba, y una barra con buscador a la izquierda y
+ * Filtros · A revisar · Columnas alineados a la derecha. En móvil el buscador
+ * ocupa todo el ancho y los tres botones se reparten una fila pareja.
+ */
+.lt-head {
+  align-items: center;
+  padding-block-end: var(--ax-space-4);
+}
+.lt-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--ax-space-3);
+  padding: 0 var(--ax-space-6) var(--ax-space-4);
+}
+.lt-search {
+  position: relative;
+  flex: 1 1 auto;
+  max-width: 420px;
+  min-width: 0;
+}
+.lt-search svg {
+  position: absolute;
+  inset-inline-start: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  color: var(--ax-text-subtle);
+  pointer-events: none;
+}
+.lt-search .ax-input {
+  width: 100%;
+  padding-inline-start: 34px;
+}
+.lt-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--ax-space-2);
+  flex-wrap: nowrap;
+  margin-inline-start: auto;
+}
+.lt-tools .ax-btn {
+  white-space: nowrap;
+}
+.lt-chips {
+  padding: 0 var(--ax-space-6) var(--ax-space-4);
+}
+.lt-chips:empty {
+  display: none;
+}
+
+@media (max-width: 767.98px) {
+  .lt-head {
+    padding: var(--ax-space-4) var(--ax-space-4) var(--ax-space-3);
+  }
+  .lt-toolbar {
+    flex-wrap: wrap;
+    padding: 0 var(--ax-space-4) var(--ax-space-3);
+  }
+  .lt-search {
+    flex-basis: 100%;
+    max-width: none;
+  }
+  .lt-tools {
+    width: 100%;
+    margin-inline-start: 0;
+  }
+  /* los tres controles se reparten el ancho por igual */
+  .lt-tools > .ax-btn,
+  .lt-tools > .ax-dropdown-wrap {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .lt-tools > .ax-dropdown-wrap > .ax-btn,
+  .lt-tools > .ax-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .lt-chips {
+    padding: 0 var(--ax-space-4) var(--ax-space-3);
+  }
+}

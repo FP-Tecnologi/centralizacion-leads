@@ -343,25 +343,28 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
     <>
       <div className="ax-dash-grid">
         <section className="ax-card ax-col--12" role="region" aria-label="Tabla de leads">
-          <div className="ax-card__header" style={{ flexWrap: 'wrap', gap: 'var(--ax-space-3)' }}>
+          <div className="ax-card__header lt-head">
             <div className="ax-card__titles">
               <h2 className="ax-card__title">Leads</h2>
-              <p className="ax-card__subtitle ax-num" style={{ fontFamily: 'var(--ax-font-mono)' }}>{total} en total</p>
+              <p className="ax-card__subtitle ax-num">{total} en total</p>
             </div>
-            <div className="ax-card__actions" style={{ flexWrap: 'wrap', gap: 'var(--ax-space-2)' }}>
-              <div style={{ position: 'relative', flex: '1 1 220px', maxWidth: 300 }}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ position: 'absolute', insetInlineStart: 11, top: '50%', transform: 'translateY(-50%)', width: 18, height: 18, color: 'var(--ax-text-subtle)' }}><path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" /><path d="M21 21l-6 -6" /></svg>
-                <input
-                  type="search"
-                  className="ax-input ax-input--sm"
-                  placeholder="Buscar nombre, correo, empresa…"
-                  value={qInput}
-                  onChange={(e) => setQInput(e.target.value)}
-                  style={{ paddingInlineStart: 34 }}
-                  aria-label="Buscar leads"
-                />
-              </div>
-              <button type="button" className="ax-btn ax-btn--secondary ax-btn--sm" onClick={() => setPanelAbierto(true)} aria-expanded={panelAbierto}>
+            {!exportarSlotEl && <div className="ax-card__actions">{exportarMenu}</div>}
+          </div>
+
+          <div className="lt-toolbar">
+            <div className="lt-search">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" /><path d="M21 21l-6 -6" /></svg>
+              <input
+                type="search"
+                className="ax-input ax-input--sm"
+                placeholder="Buscar nombre, correo, empresa…"
+                value={qInput}
+                onChange={(e) => setQInput(e.target.value)}
+                aria-label="Buscar leads"
+              />
+            </div>
+            <div className="lt-tools">
+              <button type="button" className={`ax-btn ax-btn--sm ${contadorFiltros > 0 ? 'ax-btn--primary' : 'ax-btn--secondary'}`} onClick={() => setPanelAbierto(true)} aria-expanded={panelAbierto}>
                 <svg className="ax-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 6l16 0" /><path d="M10 12l4 0" /><path d="M8 18l8 0" /></svg>
                 <span className="ax-btn__label">Filtros{contadorFiltros > 0 ? ` (${contadorFiltros})` : ''}</span>
               </button>
@@ -372,14 +375,14 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
                 onClick={() => cambiarChips({ ...filtro, aRevisar: filtro.aRevisar ? undefined : true })}
                 title="Leads importados con datos incompletos o inválidos (celdas marcadas)"
               >
+                <svg className="ax-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 9v4" /><path d="M12 17h.01" /><path d="M10.24 3.957l-8.422 14.06a1.989 1.989 0 0 0 1.7 2.983h16.845a1.989 1.989 0 0 0 1.7 -2.983l-8.423 -14.06a1.989 1.989 0 0 0 -3.4 0z" /></svg>
                 <span className="ax-btn__label">A revisar</span>
               </button>
               <ColumnasMenu columnas={columnas.map(({ key, label, grupo }) => ({ key, label, grupo }))} visibles={visibles} onCambiar={setVisibles} />
-              {!exportarSlotEl && exportarMenu}
             </div>
           </div>
 
-          <div className="ax-card__body" style={{ paddingTop: 0, paddingBottom: 'var(--ax-space-4)' }}>
+          <div className="lt-chips">
             <ChipsFiltros filtro={filtro} onCambio={cambiarChips} nombreFuente={nombreFuente} />
           </div>
 

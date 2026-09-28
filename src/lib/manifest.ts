@@ -110,14 +110,14 @@ export function groupsInSection(section: string): NavNode[] {
 /**
  * Whether a node is visible for the given role name (case-insensitive).
  * `roleName === null` (not logged in yet / no marca) hides role-restricted
- * nodes; "admin" always passes. Nodes without a `roles` whitelist are
+ * nodes; "admin" and "superadmin" always pass. Nodes without a `roles` whitelist are
  * visible to everyone.
  */
 export function visibleForRole(node: NavNode, roleName: string | null): boolean {
   if (!node.roles || node.roles.length === 0) return true;
   if (!roleName) return false;
   const role = roleName.toLowerCase();
-  if (role === 'admin') return true;
+  if (role === 'admin' || role === 'superadmin') return true;
   return node.roles.some((r) => r.toLowerCase() === role);
 }
 

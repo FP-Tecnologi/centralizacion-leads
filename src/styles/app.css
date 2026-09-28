@@ -20,6 +20,8 @@
 @import './shell.css'; /* shell-chrome: customizer drawer, header dropdowns, command palette, etc. */
 @import './appshell.css'; /* full-screen app shell for src/html/apps/** (no sidebar, no header) */
 @import './utilities.css'; /* token-driven helpers */
+@import './importar.css'; /* asistente de importación de leads */
+@import './leads-table.css'; /* cabecera y barra de la tabla de leads */
 
 /* ── Surface schemes (sidebar/header chrome) ── */
 @import './schemes.css';
