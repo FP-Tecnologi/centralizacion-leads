@@ -64,7 +64,8 @@ function Leaf({ node, level, activeSlug, roleName }: LeafProps) {
   const resolved = manifest.resolve(node)!;
   const isActive = resolved.slug === activeSlug;
   const hidden = !visibleForRole(node, roleName);
-  const cls = ['ax-nav__item', 'ax-nav__item--child'];
+  const cls = ['ax-nav__item'];
+  if (level > 1) cls.push('ax-nav__item--child');
   if (isActive) cls.push('ax-nav__item--active', 'is-active');
   if (hidden) cls.push('is-hidden');
   return (
@@ -265,15 +266,17 @@ export function Sidebar({ drawerOpen = false, onNavToggle }: { drawerOpen?: bool
               <p className="ax-sidebar__section" role="presentation">
                 {sectionLabel(section)}
               </p>
-              {groups.map((g) => (
-                <Group
-                  key={g.id}
-                  node={g}
-                  level={1}
-                  activeSlug={activeSlug}
-                  roleName={roleName}
-                />
-              ))}
+              {groups.map((g) =>
+                // Nivel 1 sin hijos (Dashboard, Exportación, Usuarios) = enlace directo;
+                // antes se dibujaba como grupo y el clic solo abría un submenú vacío.
+                // Landings/Apps offline siempre son grupo: sus hijos se inyectan desde `fuentes`.
+                manifest.childrenOf(g.id).some((c) => c.inMenu && visibleForRole(c, roleName))
+                || g.id === 'grp.landings' || g.id === 'grp.offline' ? (
+                  <Group key={g.id} node={g} level={1} activeSlug={activeSlug} roleName={roleName} />
+                ) : (
+                  <Leaf key={g.id} node={g} level={1} activeSlug={activeSlug} roleName={roleName} />
+                ),
+              )}
             </div>
           );
         })}
