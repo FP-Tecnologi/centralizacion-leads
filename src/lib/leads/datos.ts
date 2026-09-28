@@ -13,7 +13,8 @@ export interface Fuente {
 export interface Lead {
   id: string; fuente_id: string; nombres: string | null; apellido: string | null; email: string | null;
   telefono: string | null; empresa: string | null; ruc: string | null; cargo: string | null; rubro: string | null;
-  fecha_nacimiento: string | null; status: string; evento: string | null; extra: Record<string, string>; created_at: string;
+  fecha_nacimiento: string | null; status: string; evento: string | null;
+  invalidos?: Record<string, { valor: string; causa: string }>; extra: Record<string, string>; created_at: string;
   actualizado_en: string; fuentes?: { nombre: string; slug: string };
 }
 export interface Orden { campo: string; asc: boolean }

@@ -184,8 +184,15 @@ export async function exportarLeads(leads: Lead[], columnas: { key: string; labe
   // las celdas: un `label` de columna personalizada (viene de un encabezado de archivo
   // importado, ver mapeo.ts) puede empezar con = + - @ igual que cualquier valor.
   const limpiar = (v: string) => (formato === 'csv' ? sanitizarCsv(v) : v);
-  const encabezados = columnas.map((c) => limpiar(c.label));
-  const filas = leads.map((l) => columnas.map((c) => limpiar(valorColumna(l, c.key))));
+  // si algún lead trae datos marcados al importar, una columna más al final con las causas:
+  // en Excel no hay colores de la tabla, pero sí se puede filtrar por esa columna.
+  const conMarcas = leads.some((l) => l.invalidos && Object.keys(l.invalidos).length);
+  const causas = (l: Lead) => Object.values(l.invalidos ?? {}).map((m) => m.causa).join('; ');
+  const encabezados = [...columnas.map((c) => limpiar(c.label)), ...(conMarcas ? ['Datos a revisar'] : [])];
+  const filas = leads.map((l) => [
+    ...columnas.map((c) => limpiar(valorColumna(l, c.key))),
+    ...(conMarcas ? [limpiar(causas(l))] : []),
+  ]);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, hojaExcel(XLSX, encabezados, filas), 'Leads');
   XLSX.writeFile(wb, `${nombre}.${formato}`, { bookType: formato });
@@ -214,9 +221,9 @@ export async function exportarObjetos(filas: Record<string, unknown>[], columnas
 export interface FallaImportacion { fila: number; causas: string[]; etapa: 'validacion' | 'servidor'; original: Record<string, unknown> }
 
 /**
- * Registro de fallas de una importación en Excel: una fila por fila del archivo que no se
- * guardó, con el número de fila original, la causa en palabras y los datos tal cual venían
- * — así se corrige en el mismo Excel y se vuelve a importar solo eso.
+ * Registro de observaciones de una importación en Excel: una fila por fila del archivo que
+ * se importó con datos a revisar o que no se pudo guardar, con el número de fila original,
+ * la causa en palabras, el resultado y los datos tal cual venían.
  */
 export function filasRegistroFallas(fallas: FallaImportacion[], encabezados: string[]) {
   // nombres de las columnas propias del registro: si el archivo ya trae una columna
@@ -227,14 +234,14 @@ export function filasRegistroFallas(fallas: FallaImportacion[], encabezados: str
     return n;
   };
   const colFila = libre('Fila en el archivo');
-  const colCausa = libre('Causa del error');
-  const colEtapa = libre('Detectado en');
+  const colCausa = libre('Causa');
+  const colEtapa = libre('Resultado');
   const columnas = [colFila, colCausa, colEtapa, ...encabezados];
   const filas = [...fallas].sort((a, b) => a.fila - b.fila).map((f) => ({
     ...f.original,
     [colFila]: f.fila,
     [colCausa]: f.causas.join('; '),
-    [colEtapa]: f.etapa === 'validacion' ? 'Revisión previa' : 'Al guardar',
+    [colEtapa]: f.etapa === 'validacion' ? 'Importada, marcada para revisar' : 'No se guardó',
   }));
   return { columnas, filas };
 }

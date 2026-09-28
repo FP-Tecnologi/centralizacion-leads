@@ -25,6 +25,7 @@ import { FILTRO_VACIO, type FiltroLeads } from '../../lib/leads/filtros';
 import { exportarLeads } from '../../lib/leads/exportar';
 import { useAuth } from '../../context/AuthContext';
 import { ChipsFiltros } from './ChipsFiltros';
+import { CeldaMarcada } from './CeldaMarcada';
 import { ColumnasMenu } from './ColumnasMenu';
 import { FiltrosPanel } from './FiltrosPanel';
 import { EditarLeadModal } from './EditarLeadModal';
@@ -364,6 +365,15 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
                 <svg className="ax-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 6l16 0" /><path d="M10 12l4 0" /><path d="M8 18l8 0" /></svg>
                 <span className="ax-btn__label">Filtros{contadorFiltros > 0 ? ` (${contadorFiltros})` : ''}</span>
               </button>
+              <button
+                type="button"
+                className={`ax-btn ax-btn--sm ${filtro.aRevisar ? 'ax-btn--primary' : 'ax-btn--secondary'}`}
+                aria-pressed={!!filtro.aRevisar}
+                onClick={() => cambiarChips({ ...filtro, aRevisar: filtro.aRevisar ? undefined : true })}
+                title="Leads importados con datos incompletos o inválidos (celdas marcadas)"
+              >
+                <span className="ax-btn__label">A revisar</span>
+              </button>
               <ColumnasMenu columnas={columnas.map(({ key, label, grupo }) => ({ key, label, grupo }))} visibles={visibles} onCambiar={setVisibles} />
               {!exportarSlotEl && exportarMenu}
             </div>
@@ -460,15 +470,25 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
                       <td className="ax-table__td">
                         <input type="checkbox" className="ax-checkbox" checked={seleccion.has(l.id)} onChange={() => toggleFila(l.id)} aria-label={`Seleccionar ${l.nombres ?? l.email ?? l.id}`} />
                       </td>
-                      {columnasVisibles.map((c) => (
-                        <td key={c.key} className="ax-table__td">
-                          {c.key === 'status' ? (
-                            <span className={`ax-badge ax-badge--soft ax-badge--pill ax-badge--sm ${claseEstado[l.status] ?? 'ax-badge--neutral'}`}>
-                              <span className="ax-badge__dot" /><span>{l.status}</span>
-                            </span>
-                          ) : c.render ? c.render(l) : (l[c.key as keyof Lead] as string) || '—'}
-                        </td>
-                      ))}
+                      {columnasVisibles.map((c) => {
+                        // dato marcado al importar (incompleto/inválido): la celda se pinta y muestra la causa.
+                        const marca = c.key === 'nombre' ? (l.invalidos?.nombres ?? l.invalidos?.apellido) : l.invalidos?.[c.key];
+                        const contenido = c.key === 'status' ? (
+                          <span className={`ax-badge ax-badge--soft ax-badge--pill ax-badge--sm ${claseEstado[l.status] ?? 'ax-badge--neutral'}`}>
+                            <span className="ax-badge__dot" /><span>{l.status}</span>
+                          </span>
+                        ) : c.render ? c.render(l) : (l[c.key as keyof Lead] as string) || '—';
+                        return (
+                          <td key={c.key} className="ax-table__td">
+                            {marca ? (
+                              <CeldaMarcada
+                                marca={marca}
+                                valor={c.key === 'status' ? `${marca.valor} (quedó como ${l.status})` : contenido === '—' ? '' : String(contenido)}
+                              />
+                            ) : contenido}
+                          </td>
+                        );
+                      })}
                       <td className="ax-table__td" style={{ textAlign: 'end', whiteSpace: 'nowrap' }}>
                         <button
                           type="button"

@@ -27,15 +27,17 @@ describe('sugerirMapeo', () => {
 });
 
 describe('construirFilas', () => {
-  it('aplica mapeo, ignora columnas null y separa válidas de errores', () => {
+  it('aplica mapeo, ignora columnas null; la fila con error se guarda igual, marcada', () => {
     const r = construirFilas(
       [{ datos: { A: 'Ana', B: 'ana@x.com', C: 'ignorar' } }, { datos: { A: 'Luis', B: 'malo', C: '' } }],
       { A: 'nombres', B: 'email', C: null },
       [],
     );
-    expect(r.validas).toEqual([{ fila: 2, lead: { nombres: 'Ana', email: 'ana@x.com', extra: {} } }]);
-    expect(r.errores[0].fila).toBe(3);
-    expect(r.errores[0].errores).toEqual([{ campo: 'email', motivo: 'formato' }]);
+    expect(r.filas[0]).toEqual({ fila: 2, lead: { nombres: 'Ana', email: 'ana@x.com', extra: {} } });
+    expect(r.filas[1].lead.email).toBe('malo');
+    expect(r.filas[1].lead.invalidos).toEqual({ email: { valor: 'malo', causa: 'Correo "malo" no es un correo válido (ej. nombre@empresa.com)' } });
+    expect(r.observadas[0].fila).toBe(3);
+    expect(r.observadas[0].errores).toEqual([{ campo: 'email', motivo: 'formato' }]);
   });
 
   it('usa el número de fila real cuando se provee (filas con huecos)', () => {
@@ -44,8 +46,8 @@ describe('construirFilas', () => {
       { A: 'nombres', B: 'email' },
       [],
     );
-    expect(r.validas[0].fila).toBe(2);
-    expect(r.errores[0].fila).toBe(4);
+    expect(r.filas[0].fila).toBe(2);
+    expect(r.observadas[0].fila).toBe(4);
   });
 
   it('dos columnas mapeadas al mismo destino: la vacía no pisa a la llena', () => {
@@ -54,7 +56,7 @@ describe('construirFilas', () => {
       { Celular: 'telefono', 'Celular 2': 'telefono' },
       [],
     );
-    expect(r.validas[0].lead.telefono).toBe('987654321');
+    expect(r.filas[0].lead.telefono).toBe('987654321');
   });
 
   it('dos columnas mapeadas al mismo destino, ambas llenas y distintas: la segunda va a extra', () => {
@@ -63,8 +65,8 @@ describe('construirFilas', () => {
       { Celular: 'telefono', 'Celular 2': 'telefono' },
       [],
     );
-    expect(r.validas[0].lead.telefono).toBe('987654321');
-    expect(r.validas[0].lead.extra.celular_2).toBe('999888777');
+    expect(r.filas[0].lead.telefono).toBe('987654321');
+    expect(r.filas[0].lead.extra.celular_2).toBe('999888777');
   });
 
   it('Nombre/Celular/Teléfono con mapeo sugerido: "Teléfono" normaliza al propio destino "telefono" y no debe pisar a Celular', () => {
@@ -76,8 +78,8 @@ describe('construirFilas', () => {
       mapeo,
       [],
     );
-    expect(r.validas[0].lead.telefono).toBe('987654321');
-    expect(r.validas[0].lead.extra.telefono_2).toBe('111222333');
+    expect(r.filas[0].lead.telefono).toBe('987654321');
+    expect(r.filas[0].lead.extra.telefono_2).toBe('111222333');
   });
 
   it('normaliza a ISO una columna extra tipada como fecha en formato DD/MM/YYYY antes de enviar (leads_completo solo castea ISO)', () => {
@@ -87,7 +89,7 @@ describe('construirFilas', () => {
       [],
       { visita: 'fecha' },
     );
-    expect(r.validas[0].lead.extra.visita).toBe('2024-01-15');
+    expect(r.filas[0].lead.extra.visita).toBe('2024-01-15');
   });
 
   it('deja una fecha extra ya ISO tal cual', () => {
@@ -97,7 +99,7 @@ describe('construirFilas', () => {
       [],
       { visita: 'fecha' },
     );
-    expect(r.validas[0].lead.extra.visita).toBe('2024-01-15');
+    expect(r.filas[0].lead.extra.visita).toBe('2024-01-15');
   });
 
   it('no toca una columna extra que no está tipada como fecha', () => {
@@ -107,7 +109,7 @@ describe('construirFilas', () => {
       [],
       { notas: 'texto' },
     );
-    expect(r.validas[0].lead.extra.notas).toBe('15/01/2024');
+    expect(r.filas[0].lead.extra.notas).toBe('15/01/2024');
   });
 });
 
@@ -250,8 +252,8 @@ describe('construirFilas — datos reales de un consolidado', () => {
       'Necesidad Detectada': 'Cámaras', Evento: 'Semana de Ingeniería Geológica', Estado: 'Nuevo',
       'Fecha de nacimiento': '24/08/1972', Fuente: 'leads-expomina.xlsx',
     })], mapeo, []);
-    expect(r.errores).toEqual([]);
-    expect(r.validas[0].lead).toEqual({
+    expect(r.observadas).toEqual([]);
+    expect(r.filas[0].lead).toEqual({
       nombres: 'Fernando', apellido: 'Aguilar', ruc: '07627328', empresa: 'Praeveni', telefono: '913023553',
       email: 'fernando@praeveni.com.pe', fecha_nacimiento: '1972-08-24',
       created_at: '2026-09-16', status: 'nuevo', evento: 'Semana de Ingeniería Geológica',
@@ -261,44 +263,56 @@ describe('construirFilas — datos reales de un consolidado', () => {
 
   it('varios teléfonos en una celda: el primero a Teléfono, el resto a telefono_2', () => {
     const r = construirFilas([fila({ 'Nombres / Contacto': 'Luis', 'Teléfono': '914 117 489 / 997 589 940 |' })], mapeo, []);
-    expect(r.validas[0].lead.telefono).toBe('914117489');
-    expect(r.validas[0].lead.extra.telefono_2).toBe('997589940');
+    expect(r.filas[0].lead.telefono).toBe('914117489');
+    expect(r.filas[0].lead.extra.telefono_2).toBe('997589940');
   });
 
   it('correo con espacios adentro se limpia en vez de rechazarse', () => {
     const r = construirFilas([fila({ Email: 'ventas @rrhpart.com' })], mapeo, []);
-    expect(r.validas[0].lead.email).toBe('ventas@rrhpart.com');
+    expect(r.filas[0].lead.email).toBe('ventas@rrhpart.com');
   });
 
   it('fila sin correo ni teléfono: error con causa legible', () => {
     const r = construirFilas([fila({ 'Nombres / Contacto': 'Pedro' })], mapeo, []);
-    expect(r.errores[0].causas).toEqual(['Sin correo ni teléfono: se necesita al menos uno para guardar el lead']);
+    expect(r.observadas[0].causas).toEqual(['Sin correo ni teléfono: se guarda, pero no se podrá contactar ni detectar si está repetido']);
+    expect(r.filas).toHaveLength(1);
   });
 
   it('estado desconocido y teléfono inválido: la causa dice el valor y qué se espera', () => {
     const r = construirFilas([fila({ Email: 'a@x.com', Estado: 'ganado', 'Teléfono': '123' })], mapeo, []);
-    expect(r.errores[0].causas).toEqual([
+    expect(r.observadas[0].causas).toEqual([
       'Teléfono "123" no es un teléfono válido (6 a 15 dígitos, puede empezar con +)',
       'Estado "ganado" no es válido (usa: nuevo, contactado, asistio, descartado)',
     ]);
   });
 
-  it('campos obligatorios de la fuente: bloquean solo si exigirRequeridos', () => {
+  it('campo obligatorio vacío: se importa marcado como incompleto', () => {
     const campos: CampoFormulario[] = [{ key: 'ruc', label: 'RUC / DNI', tipo: 'documento', requerido: true }];
-    const filas = [fila({ Email: 'a@x.com' })];
-    expect(construirFilas(filas, mapeo, campos).errores[0].causas).toEqual(['RUC / DNI está vacío y es obligatorio en esta fuente']);
-    expect(construirFilas(filas, mapeo, campos, {}, { exigirRequeridos: false }).validas).toHaveLength(1);
+    const r = construirFilas([fila({ Email: 'a@x.com' })], mapeo, campos);
+    expect(r.filas).toHaveLength(1);
+    expect(r.filas[0].lead.invalidos).toEqual({ ruc: { valor: '', causa: 'RUC / DNI está vacío y es obligatorio en esta fuente' } });
+  });
+
+  it('fecha imposible (31/02): no va a la columna de fecha, queda el texto original marcado', () => {
+    const r = construirFilas([fila({ Email: 'a@x.com', 'Fecha de nacimiento': '31/02/1980', Estado: 'ganado' })], mapeo, []);
+    const { lead } = r.filas[0];
+    expect(lead.fecha_nacimiento).toBeUndefined();
+    expect(lead.status).toBeUndefined();
+    expect(lead.invalidos).toMatchObject({
+      fecha_nacimiento: { valor: '31/02/1980' },
+      status: { valor: 'ganado' },
+    });
   });
 
   it('DNI que perdió el cero inicial en Excel se completa a 8 dígitos', () => {
     const campos: CampoFormulario[] = [{ key: 'ruc', label: 'RUC / DNI', tipo: 'documento', requerido: false }];
     const r = construirFilas([fila({ Email: 'a@x.com', 'RUC / DNI': '7627328' })], mapeo, campos);
-    expect(r.validas[0].lead.ruc).toBe('07627328');
+    expect(r.filas[0].lead.ruc).toBe('07627328');
   });
 
   it('fecha extra en serial se convierte cuando la columna está tipada como fecha', () => {
     const r = construirFilas([{ datos: { Email: 'a@x.com', 'Fecha de visita': '46281' } }], { Email: 'email', 'Fecha de visita': 'fecha_de_visita' }, [], { fecha_de_visita: 'fecha' });
-    expect(r.validas[0].lead.extra.fecha_de_visita).toBe('2026-09-16');
+    expect(r.filas[0].lead.extra.fecha_de_visita).toBe('2026-09-16');
   });
 });
 

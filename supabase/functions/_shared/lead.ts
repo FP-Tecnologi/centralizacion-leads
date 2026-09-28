@@ -24,7 +24,7 @@ export function esNucleo(k: string): k is CampoNucleo {
 export const CLAVES_RESERVADAS = [
   ...NUCLEO,
   'status', 'extra', 'id', 'fuente_id', 'created_at', 'actualizado_en', 'duplicado_de',
-  'id_externo', 'origen', 'user_agent', 'evento', 'fuente_slug', 'fuente_nombre',
+  'id_externo', 'origen', 'user_agent', 'evento', 'invalidos', 'fuente_slug', 'fuente_nombre',
 ] as const;
 
 export function esClaveReservada(k: string): boolean {

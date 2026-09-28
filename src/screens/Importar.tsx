@@ -14,14 +14,14 @@ import { supabase } from '../lib/supabase';
 import { guardarFuente, listarColumnasExtra, listarFuentes, registrarColumnas, type ColumnaExtra, type Fuente } from '../lib/leads/datos';
 import {
   CAMPOS_IMPORTACION, CLAVES_UI, LABEL_DESTINO, claveDestinoSegura, construirFilas, describirErrorServidor, esDestinoDirecto,
-  inferirTipo, labelParaClaveSobrante, normalizarEncabezado, slugify, sugerirMapeo, type FilaEntrada, type Mapeo,
+  inferirTipo, labelParaClaveSobrante, normalizarEncabezado, slugify, sugerirMapeo, type FilaEntrada, type Mapeo, type MarcaInvalido,
 } from '../lib/leads/mapeo';
+import { CeldaMarcada } from '../components/leads/CeldaMarcada';
 import { exportarRegistroFallas, leerArchivo, type FallaImportacion } from '../lib/leads/exportar';
 import { NUCLEO } from '../../supabase/functions/_shared/lead';
 
 // orden fijo de columnas en la vista previa: núcleo + estado/evento/fecha de registro.
 const COLS_DIRECTAS = [...NUCLEO, ...CAMPOS_IMPORTACION] as string[];
-const MAX_FILAS = 50_000;
 const LOTE = 500;
 
 interface ImportacionHist { id: string; archivo: string; nuevas: number; actualizadas: number; errores: number; creado_en: string }
@@ -58,7 +58,6 @@ export function Importar() {
 
   // Paso 2
   const [mapeo, setMapeo] = useState<Mapeo>({});
-  const [exigirRequeridos, setExigirRequeridos] = useState(false);
   const [guardandoMapeo, setGuardandoMapeo] = useState(false);
   const [errorMapeo, setErrorMapeo] = useState<string | null>(null);
 
@@ -110,10 +109,6 @@ export function Importar() {
     setLeyendo(true);
     try {
       const { encabezados: h, filas: f } = await leerArchivo(file);
-      if (f.length > MAX_FILAS) {
-        setErrorArchivo(`El archivo tiene ${f.length} filas; el máximo permitido es ${MAX_FILAS.toLocaleString('es-PE')}.`);
-        return;
-      }
       setEncabezados(h);
       setFilasArchivo(f);
     } catch {
@@ -196,10 +191,10 @@ export function Importar() {
     // upsert_lead ahora solo mira claves que la fuente ya declara, así que si no se
     // registran acá jamás se vuelven columna real).
     const tiposPrimarios = Object.fromEntries(colsPrimarias.map((c) => [c.key, c.tipo]));
-    const primeraPasada = construirFilas(filasArchivo, mapeo, fuente.campos, tiposPrimarios, { exigirRequeridos });
+    const primeraPasada = construirFilas(filasArchivo, mapeo, fuente.campos, tiposPrimarios);
     const clavesPrimarias = new Set(colsPrimarias.map((c) => c.key));
     const clavesSobrantes = new Set<string>();
-    for (const { lead } of primeraPasada.validas) {
+    for (const { lead } of primeraPasada.filas) {
       for (const k of Object.keys(lead.extra)) {
         if (!clavesPrimarias.has(k)) clavesSobrantes.add(k);
       }
@@ -208,7 +203,7 @@ export function Importar() {
       key,
       label: labelParaClaveSobrante(key, mapeo),
       tipo: inferirTipo(
-        primeraPasada.validas.map(({ lead }) => lead.extra[key]).filter((v): v is string => typeof v === 'string'),
+        primeraPasada.filas.map(({ lead }) => lead.extra[key]).filter((v): v is string => typeof v === 'string'),
       ),
     }));
 
@@ -231,17 +226,18 @@ export function Importar() {
         return [...prev, ...cols.filter((c) => !previas.has(c.key))].sort((a, b) => a.label.localeCompare(b.label));
       });
       setGuardandoMapeo(false);
-      if (fallidas.length) {
-        setErrorMapeo(`No se pudieron registrar estas columnas: ${fallidas.join('; ')}`);
-        return;
-      }
+      // no frena la importación: el dato igual se guarda en el lead (extra), solo que esa
+      // columna no aparece como columna propia en tabla/filtros hasta registrarla.
+      setErrorMapeo(fallidas.length
+        ? `Estas columnas no se pudieron crear como columna propia (sus datos se guardan igual dentro del lead): ${fallidas.join('; ')}`
+        : null);
     }
     // fechas extra en DD/MM/YYYY -> ISO antes de enviar: leads_completo (SQL) solo castea
     // ISO, y un DD/MM/YYYY guardado tal cual saldría null ahí para siempre. Se corre
     // construirFilas de nuevo (ahora con los tipos de las claves sobrantes también) en vez
     // de reusar `primeraPasada`, que no las normalizó.
     const tiposExtra = Object.fromEntries(cols.map((c) => [c.key, c.tipo]));
-    setConstruido(construirFilas(filasArchivo, mapeo, fuente.campos, tiposExtra, { exigirRequeridos }));
+    setConstruido(construirFilas(filasArchivo, mapeo, fuente.campos, tiposExtra));
     setResultado(null);
     setErrorImportar(null);
     irA(2);
@@ -262,7 +258,8 @@ export function Importar() {
     setImportando(true);
     setErrorImportar(null);
     setProgreso(0);
-    const validas = construido.validas;
+    // todas las filas se envían (las que tienen datos a revisar van con su marca en `invalidos`).
+    const validas = construido.filas;
     const totalLotes = Math.max(1, Math.ceil(validas.length / LOTE));
     let nuevas = 0;
     let actualizadas = 0;
@@ -317,7 +314,7 @@ export function Importar() {
     if (!construido) return [];
     const originalPorFila = new Map(filasArchivo.map((f, i) => [f.fila ?? i + 2, f.datos]));
     return [
-      ...construido.errores.map((e) => ({ fila: e.fila, causas: e.causas, etapa: 'validacion' as const, original: e.original })),
+      ...construido.observadas.map((e) => ({ fila: e.fila, causas: e.causas, etapa: 'validacion' as const, original: e.original })),
       ...(resultado?.erroresServidor ?? []).map((e) => ({
         fila: e.fila, causas: [e.motivo], etapa: 'servidor' as const, original: originalPorFila.get(e.fila) ?? {},
       })),
@@ -333,20 +330,22 @@ export function Importar() {
   const colsPreview = useMemo(() => {
     if (!construido) return [];
     const presentes = new Set<string>();
-    for (const { lead } of construido.validas) for (const k of Object.keys(lead)) presentes.add(k);
+    for (const { lead } of construido.filas) for (const k of Object.keys(lead)) presentes.add(k);
     return COLS_DIRECTAS.filter((k) => presentes.has(k));
   }, [construido]);
   const labelExtra = (k: string) => columnasExtra.find((c) => c.key === k)?.label ?? k;
 
-  // correos repetidos dentro del mismo archivo: se guardan como un solo lead (la fila de más
-  // abajo completa/actualiza a la anterior), así que "nuevas" puede salir menor que el total.
+  // mismo correo y mismo evento dentro del archivo: se guardan como un solo lead (la fila de
+  // más abajo completa a la anterior), así que "nuevas" puede salir menor que el total. El
+  // mismo correo en otro evento es otro lead y no cuenta acá.
   const repetidos = useMemo(() => {
     if (!construido) return 0;
     const vistos = new Set<string>();
     let n = 0;
-    for (const { lead } of construido.validas) {
-      const e = typeof lead.email === 'string' ? lead.email : '';
-      if (!e) continue;
+    for (const { lead } of construido.filas) {
+      const correo = typeof lead.email === 'string' ? lead.email : '';
+      if (!correo) continue;
+      const e = `${correo}|${typeof lead.evento === 'string' ? lead.evento : ''}`;
       if (vistos.has(e)) n += 1; else vistos.add(e);
     }
     return n;
@@ -361,11 +360,11 @@ export function Importar() {
     );
   }
 
-  const totalConError = (construido?.errores.length ?? 0) + (resultado?.erroresServidor.length ?? 0);
+  const totalObservadas = construido?.observadas.length ?? 0;
 
   return (
     <>
-      <PageHead title="Importar leads" subtitle="Excel (.xlsx, .xls) o CSV. Máximo 50 000 filas por archivo." />
+      <PageHead title="Importar leads" subtitle="Excel (.xlsx, .xls) o CSV. Ninguna fila se descarta: lo incompleto se importa marcado para revisar." />
 
       <div className="ax-card ax-col--12">
         <div className="ax-tabs ax-tabs--pill" style={{ padding: 'var(--ax-space-4) var(--ax-space-5) 0' }}>
@@ -513,13 +512,6 @@ export function Importar() {
                   </tbody>
                 </table>
               </div>
-              <label className="ax-cluster" style={{ gap: 'var(--ax-space-2)', fontSize: 'var(--ax-text-sm)' }}>
-                <input type="checkbox" className="ax-checkbox" checked={exigirRequeridos} onChange={(e) => setExigirRequeridos(e.target.checked)} />
-                <span>
-                  Exigir los campos obligatorios del formulario de esta fuente (si está desmarcado, solo se
-                  exige correo o teléfono y que los datos tengan formato válido)
-                </span>
-              </label>
               {errorMapeo && <p role="alert" style={{ color: 'var(--ax-danger-500)' }}>{errorMapeo}</p>}
               <div className="ax-cluster" style={{ gap: 'var(--ax-space-2)' }}>
                 <button type="button" className="ax-btn ax-btn--secondary" onClick={() => setPaso(0)}>Atrás</button>
@@ -535,8 +527,8 @@ export function Importar() {
               {!resultado && (
                 <>
                   <p className="ax-num">
-                    <b style={{ color: 'var(--ax-success-500)' }}>{construido.validas.length} filas válidas</b>
-                    {construido.errores.length > 0 && <>, <b style={{ color: 'var(--ax-danger-500)' }}>{construido.errores.length} con errores</b> (no se importan)</>}
+                    <b style={{ color: 'var(--ax-success-500)' }}>{construido.filas.length} filas se importarán</b>
+                    {totalObservadas > 0 && <>, de ellas <b style={{ color: 'var(--ax-warning-500)' }}>{totalObservadas} con datos a revisar</b></>}
                   </p>
                   {repetidos > 0 && (
                     <p className="ax-card__subtitle" style={{ margin: 0 }}>
@@ -545,7 +537,7 @@ export function Importar() {
                     </p>
                   )}
 
-                  {!!construido.validas.length && (
+                  {!!construido.filas.length && (
                     <div className="ax-table-wrap">
                       <table className="ax-table">
                         <thead className="ax-table__head">
@@ -556,56 +548,63 @@ export function Importar() {
                           </tr>
                         </thead>
                         <tbody>
-                          {construido.validas.slice(0, 20).map(({ fila, lead }) => (
+                          {construido.filas.slice(0, 20).map(({ fila, lead }) => {
+                            const marcas = (lead.invalidos ?? {}) as Record<string, MarcaInvalido>;
+                            return (
                             <tr key={fila} className="ax-table__row">
                               <td className="ax-table__td ax-num">{fila}</td>
                               {colsPreview.map((k) => (
-                                <td key={k} className="ax-table__td">{String((lead as unknown as Record<string, unknown>)[k] ?? '')}</td>
+                                <td key={k} className="ax-table__td">
+                                  <CeldaMarcada valor={String((lead as unknown as Record<string, unknown>)[k] ?? '')} marca={marcas[k]} />
+                                </td>
                               ))}
                               <td className="ax-table__td">{Object.entries(lead.extra).map(([k, v]) => `${labelExtra(k)}: ${v}`).join(' · ')}</td>
                             </tr>
-                          ))}
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
                   )}
-                  {construido.validas.length > 20 && (
+                  {construido.filas.length > 20 && (
                     <p className="ax-card__subtitle" style={{ margin: 0 }}>Vista previa de las primeras 20 filas.</p>
                   )}
 
-                  {!!construido.errores.length && (
+                  {!!construido.observadas.length && (
                     <div>
                       <div className="ax-cluster" style={{ justifyContent: 'space-between' }}>
-                        <h3 className="ax-card__title" style={{ fontSize: 'var(--ax-text-md)' }}>Filas con errores</h3>
-                        <button type="button" className="ax-btn ax-btn--secondary ax-btn--sm" onClick={descargarFallas}>Descargar registro de fallas (Excel)</button>
+                        <h3 className="ax-card__title" style={{ fontSize: 'var(--ax-text-md)' }}>Filas con datos a revisar (se importan marcadas)</h3>
+                        <button type="button" className="ax-btn ax-btn--secondary ax-btn--sm" onClick={descargarFallas}>Descargar registro de observaciones (Excel)</button>
                       </div>
                       <ul style={{ margin: 0, paddingInlineStart: 'var(--ax-space-5)', fontSize: 'var(--ax-text-sm)' }}>
-                        {construido.errores.slice(0, 50).map((e) => (
+                        {construido.observadas.slice(0, 50).map((e) => (
                           <li key={e.fila}>Fila {e.fila}: {e.causas.join('; ')}</li>
                         ))}
                       </ul>
-                      {construido.errores.length > 50 && (
-                        <p className="ax-card__subtitle">…y {construido.errores.length - 50} más en el Excel de fallas.</p>
+                      {construido.observadas.length > 50 && (
+                        <p className="ax-card__subtitle">…y {construido.observadas.length - 50} más en el Excel de observaciones.</p>
                       )}
                     </div>
                   )}
 
                   <div className="ax-cluster" style={{ gap: 'var(--ax-space-2)' }}>
                     <button type="button" className="ax-btn ax-btn--secondary" onClick={() => setPaso(1)} disabled={importando}>Atrás</button>
-                    <button type="button" className="ax-btn ax-btn--primary" disabled={!construido.validas.length || importando} onClick={importar}>
-                      {importando ? `Importando… ${progreso}/${construido.validas.length}` : `Importar ${construido.validas.length} filas`}
+                    <button type="button" className="ax-btn ax-btn--primary" disabled={!construido.filas.length || importando} onClick={importar}>
+                      {importando ? `Importando… ${progreso}/${construido.filas.length}` : `Importar ${construido.filas.length} filas`}
                     </button>
                   </div>
                 </>
               )}
 
+              {errorMapeo && <p role="status" style={{ color: 'var(--ax-warning-500)' }}>{errorMapeo}</p>}
               {errorImportar && <p role="alert" style={{ color: 'var(--ax-danger-500)' }}>{errorImportar}</p>}
 
               {resultado && (
                 <>
                   <p className="ax-num" style={{ fontSize: 'var(--ax-text-lg)' }}>
                     {resultado.nuevas} nuevas, {resultado.actualizadas} actualizadas
-                    {totalConError > 0 && <>, {totalConError} con error</>}
+                    {totalObservadas > 0 && <>, {totalObservadas} con datos a revisar (marcados en la tabla)</>}
+                    {resultado.erroresServidor.length > 0 && <>, {resultado.erroresServidor.length} no se pudieron guardar</>}
                   </p>
                   {!!resultado.erroresServidor.length && (
                     <ul style={{ margin: 0, paddingInlineStart: 'var(--ax-space-5)', fontSize: 'var(--ax-text-sm)' }}>
@@ -615,7 +614,7 @@ export function Importar() {
                   {fallas.length > 0 && (
                     <div>
                       <button type="button" className="ax-btn ax-btn--secondary ax-btn--sm" onClick={descargarFallas}>
-                        Descargar registro de fallas (Excel, {fallas.length} fila{fallas.length === 1 ? '' : 's'})
+                        Descargar registro de observaciones (Excel, {fallas.length} fila{fallas.length === 1 ? '' : 's'})
                       </button>
                     </div>
                   )}

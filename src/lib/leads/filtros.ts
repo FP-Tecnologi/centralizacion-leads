@@ -2,7 +2,8 @@ import { esNucleo } from '../../../supabase/functions/_shared/lead';
 
 export type Operador = 'eq' | 'neq' | 'contiene' | 'gte' | 'lte' | 'vacio' | 'no_vacio';
 export interface Condicion { campo: string; op: Operador; valor?: string }
-export interface FiltroLeads { q?: string; fuentes?: string[]; estados?: string[]; desde?: string; hasta?: string; condiciones: Condicion[] }
+// aRevisar: solo leads con algún dato marcado como incompleto/inválido al importar (leads.invalidos).
+export interface FiltroLeads { q?: string; fuentes?: string[]; estados?: string[]; desde?: string; hasta?: string; aRevisar?: boolean; condiciones: Condicion[] }
 export interface ConsultaFiltrable {
   eq(c: string, v: unknown): this; neq(c: string, v: unknown): this; ilike(c: string, v: string): this;
   gte(c: string, v: unknown): this; lte(c: string, v: unknown): this; in(c: string, v: unknown[]): this;
@@ -33,6 +34,7 @@ export function aplicarFiltro<Q extends ConsultaFiltrable>(q: Q, f: FiltroLeads)
   if (f.estados?.length) q = q.in('status', f.estados);
   if (f.desde) q = q.gte('created_at', `${f.desde}T00:00:00-05:00`);
   if (f.hasta) q = q.lte('created_at', `${f.hasta}T23:59:59.999-05:00`);
+  if (f.aRevisar) q = q.neq('invalidos', '{}');
   for (const c of f.condiciones) {
     const col = columna(c.campo);
     const v = c.valor ?? '';
@@ -56,6 +58,7 @@ export function describirFiltro(f: FiltroLeads, nombreFuente: (id: string) => st
   if (f.estados?.length) out.push({ clave: 'estados', texto: `Estado: ${f.estados.join(', ')}` });
   if (f.desde) out.push({ clave: 'desde', texto: `Desde ${f.desde}` });
   if (f.hasta) out.push({ clave: 'hasta', texto: `Hasta ${f.hasta}` });
+  if (f.aRevisar) out.push({ clave: 'aRevisar', texto: 'Con datos a revisar' });
   f.condiciones.forEach((c, i) => out.push({
     clave: `cond:${i}`,
     texto: `${c.campo} ${OPERADORES[c.op]}${c.op === 'vacio' || c.op === 'no_vacio' ? '' : ` ${c.valor ?? ''}`}`,
@@ -69,6 +72,6 @@ export function quitarDeFiltro(f: FiltroLeads, clave: string): FiltroLeads {
     return { ...f, condiciones: f.condiciones.filter((_, j) => j !== i) };
   }
   const copia = { ...f };
-  delete copia[clave as 'q' | 'fuentes' | 'estados' | 'desde' | 'hasta'];
+  delete copia[clave as 'q' | 'fuentes' | 'estados' | 'desde' | 'hasta' | 'aRevisar'];
   return copia;
 }

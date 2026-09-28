@@ -160,16 +160,16 @@ describe('filasRegistroFallas', () => {
       { fila: 40, causas: ['Teléfono "1" no es un teléfono válido'], etapa: 'validacion', original: { Nombre: 'Jack', Fila: 'x' } },
       { fila: 38, causas: ['Sin correo ni teléfono'], etapa: 'servidor', original: { Nombre: 'Pedro', Fila: 'y' } },
     ], ['Nombre', 'Fila']);
-    expect(columnas).toEqual(['Fila en el archivo', 'Causa del error', 'Detectado en', 'Nombre', 'Fila']);
-    expect(filas.map((f) => [f['Fila en el archivo'], f['Causa del error'], f['Detectado en'], f.Nombre, f.Fila])).toEqual([
-      [38, 'Sin correo ni teléfono', 'Al guardar', 'Pedro', 'y'],
-      [40, 'Teléfono "1" no es un teléfono válido', 'Revisión previa', 'Jack', 'x'],
+    expect(columnas).toEqual(['Fila en el archivo', 'Causa', 'Resultado', 'Nombre', 'Fila']);
+    expect(filas.map((f) => [f['Fila en el archivo'], f['Causa'], f['Resultado'], f.Nombre, f.Fila])).toEqual([
+      [38, 'Sin correo ni teléfono', 'No se guardó', 'Pedro', 'y'],
+      [40, 'Teléfono "1" no es un teléfono válido', 'Importada, marcada para revisar', 'Jack', 'x'],
     ]);
   });
 
-  it('no pisa una columna del archivo que ya se llame "Causa del error"', () => {
-    const { columnas } = filasRegistroFallas([], ['Causa del error']);
-    expect(columnas).toEqual(['Fila en el archivo', 'Causa del error (2)', 'Detectado en', 'Causa del error']);
+  it('no pisa una columna del archivo que ya se llame "Causa"', () => {
+    const { columnas } = filasRegistroFallas([], ['Causa']);
+    expect(columnas).toEqual(['Fila en el archivo', 'Causa (2)', 'Resultado', 'Causa']);
   });
 });
 

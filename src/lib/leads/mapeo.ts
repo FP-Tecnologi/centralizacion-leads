@@ -269,7 +269,7 @@ export function normalizarEstado(v: string): string {
 export function describirError(e: ErrorCampo, valor: string | undefined, campo?: CampoFormulario): string {
   const nombre = campo?.label ?? LABEL_DESTINO[e.campo] ?? e.campo;
   const muestra = valor !== undefined && valor !== '' ? ` "${valor}"` : '';
-  if (e.motivo === 'contacto') return 'Sin correo ni teléfono: se necesita al menos uno para guardar el lead';
+  if (e.motivo === 'contacto') return 'Sin correo ni teléfono: se guarda, pero no se podrá contactar ni detectar si está repetido';
   if (e.motivo === 'requerido') return `${nombre} está vacío y es obligatorio en esta fuente`;
   const tipo = e.campo === 'status' ? 'status' : e.campo === 'created_at' ? 'fecha' : campo?.tipo
     ?? (e.campo === 'email' ? 'email' : e.campo === 'telefono' ? 'telefono' : e.campo === 'fecha_nacimiento' ? 'fecha' : undefined);
@@ -277,7 +277,7 @@ export function describirError(e: ErrorCampo, valor: string | undefined, campo?:
     case 'email': return `${nombre}${muestra} no es un correo válido (ej. nombre@empresa.com)`;
     case 'telefono': return `${nombre}${muestra} no es un teléfono válido (6 a 15 dígitos, puede empezar con +)`;
     case 'documento': return `${nombre}${muestra} no es un RUC/DNI válido (DNI 8 dígitos, RUC 11)`;
-    case 'fecha': return `${nombre}${muestra} no es una fecha reconocida (usa AAAA-MM-DD o DD/MM/AAAA)`;
+    case 'fecha': return `${nombre}${muestra} no es una fecha válida (formatos aceptados: AAAA-MM-DD o DD/MM/AAAA)`;
     case 'numero': return `${nombre}${muestra} no es un número`;
     case 'opcion': return `${nombre}${muestra} no es una opción válida (${(campo?.opciones ?? []).join(', ')})`;
     case 'status': return `${nombre}${muestra} no es válido (usa: ${ESTADOS_LEAD.join(', ')})`;
@@ -287,7 +287,7 @@ export function describirError(e: ErrorCampo, valor: string | undefined, campo?:
 
 // Errores que devuelve el servidor (importar_leads → sqlerrm) traducidos a una causa legible.
 export function describirErrorServidor(motivo: string): string {
-  if (motivo.includes('fila_sin_contacto')) return 'Sin correo ni teléfono: se necesita al menos uno para guardar el lead';
+  if (motivo.includes('fila_sin_contacto')) return 'Sin correo ni teléfono: no se pudo guardar';
   if (motivo.includes('estado_invalido')) return `Estado no válido (usa: ${ESTADOS_LEAD.join(', ')})`;
   if (motivo.includes('fecha_registro_invalida')) return 'Fecha de registro no reconocida';
   if (/invalid input syntax for type date|date\/time field value out of range/i.test(motivo)) return `Fecha inválida (${motivo})`;
@@ -302,24 +302,35 @@ function valorCampo(lead: LeadEntrada, key: string): string | undefined {
 
 export interface FilaConError { fila: number; errores: ErrorCampo[]; causas: string[]; original: Record<string, unknown> }
 
+// Marca de un dato a revisar, tal como se guarda en leads.invalidos ({campo: Marca}).
+export interface MarcaInvalido { valor: string; causa: string }
+
+// Campos con columna tipada en la base: un valor inválido no cabe ahí (31/02 no es una
+// fecha, "ganado" no es un estado), así que se quita del lead y queda solo en invalidos.
+const SIN_COLUMNA_PARA_INVALIDO = new Set(['fecha_nacimiento', 'created_at', 'status']);
+
 export function construirFilas(
   filas: FilaEntrada[],
   mapeo: Mapeo,
   campos: CampoFormulario[],
   tiposExtra: Record<string, 'texto' | 'fecha' | 'numero'> = {},
-  // false: un campo obligatorio del formulario de la fuente vacío no bloquea la fila (un
-  // consolidado de feria rara vez trae RUC o rubro de todos); sigue exigiéndose correo o
-  // teléfono y que lo que venga tenga formato válido.
-  { exigirRequeridos = true }: { exigirRequeridos?: boolean } = {},
 ) {
-  const validas: { fila: number; lead: LeadEntrada }[] = [];
-  const errores: FilaConError[] = [];
+  // Ninguna fila se descarta: todas van a `filas`. Las que traen algo incompleto o con
+  // formato inválido se guardan igual, con lead.invalidos = {campo: {valor, causa}} (la
+  // tabla pinta esas celdas), y además se listan en `observadas` para la vista previa y el
+  // Excel de observaciones.
+  const salida: { fila: number; lead: LeadEntrada }[] = [];
+  const observadas: FilaConError[] = [];
   const porKey = new Map(campos.map((c) => [c.key, c]));
   const tipoDe = (k: string) => porKey.get(k)?.tipo;
   filas.forEach(({ fila: filaNum, datos: original }, i) => {
     const datos: Record<string, unknown> = {};
-    const guardar = (destino: string, clave: string, valor: unknown) => {
+    // texto tal cual venía en el archivo, por destino: si el valor resulta inválido es lo
+    // que se guarda en la marca (se ve "31/02/1980", no la conversión fallida "1980-02-31").
+    const crudo: Record<string, string> = {};
+    const guardar = (destino: string, clave: string, valor: unknown, original: unknown = valor) => {
       if (vacio(datos[destino])) {
+        if (!vacio(original)) crudo[destino] = String(original).trim();
         // primer valor visto para este destino (o el único no vacío hasta ahora): se guarda.
         datos[destino] = valor;
       } else if (!vacio(valor) && String(valor).trim() !== String(datos[destino]).trim()) {
@@ -350,7 +361,7 @@ export function construirFilas(
       const esFecha = destino === 'fecha_nacimiento' || destino === 'created_at' || tipoDe(destino) === 'fecha' || tiposExtra[destino] === 'fecha';
       // destino de fecha: serial de Excel (46281), DD/MM/AAAA, 16-Sep-2026… → ISO. Si no se
       // reconoce, va tal cual y la validación lo reporta con su causa.
-      guardar(destino, normalizarEncabezado(h), esFecha ? (aFechaISO(texto, true) ?? texto) : texto);
+      guardar(destino, normalizarEncabezado(h), esFecha ? (aFechaISO(texto, true) ?? texto) : texto, texto);
     }
 
     // estado/evento/fecha de registro van en la raíz del lead (columnas reales), no en extra.
@@ -362,7 +373,7 @@ export function construirFilas(
     const lead = separarLead(datos);
     Object.assign(lead, especiales);
 
-    const errs = validarLead(lead, campos).filter((e) => exigirRequeridos || e.motivo !== 'requerido');
+    const errs = validarLead(lead, campos);
     if (especiales.status !== undefined && !(ESTADOS_LEAD as readonly string[]).includes(especiales.status)) {
       errs.push({ campo: 'status', motivo: 'formato' });
     }
@@ -371,11 +382,19 @@ export function construirFilas(
     }
     const fila = filaNum ?? i + 2;
     if (errs.length) {
-      errores.push({
-        fila, errores: errs, original,
-        causas: errs.map((e) => describirError(e, valorCampo(lead, e.campo), porKey.get(e.campo))),
-      });
-    } else validas.push({ fila, lead });
+      const invalidos: Record<string, MarcaInvalido> = {};
+      const causas: string[] = [];
+      for (const e of errs) {
+        const valor = crudo[e.campo] ?? valorCampo(lead, e.campo) ?? '';
+        const causa = describirError(e, valor, porKey.get(e.campo));
+        causas.push(causa);
+        invalidos[e.campo] = { valor, causa };
+        if (SIN_COLUMNA_PARA_INVALIDO.has(e.campo) && e.motivo === 'formato') delete lead[e.campo];
+      }
+      lead.invalidos = invalidos;
+      observadas.push({ fila, errores: errs, original, causas });
+    }
+    salida.push({ fila, lead });
   });
-  return { validas, errores };
+  return { filas: salida, observadas };
 }
