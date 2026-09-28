@@ -22,6 +22,8 @@
 @import './utilities.css'; /* token-driven helpers */
 @import './importar.css'; /* asistente de importación de leads */
 @import './leads-table.css'; /* cabecera y barra de la tabla de leads */
+@import './dashboard.css'; /* filtros del dashboard junto al título */
+@import './rango-fechas.css'; /* selector de rango de fechas en un solo campo */
 @import './dialogo.css'; /* confirmaciones con el diseño del sistema (no window.confirm) */
 
 /* ── Surface schemes (sidebar/header chrome) ── */

@@ -1,0 +1,44 @@
+/*
+ * Sistema de Leads — filtros del Dashboard en la cabecera, a la derecha del título
+ * y alineados arriba con él. En móvil pasan debajo del título a todo el ancho.
+ */
+.ax-page-head__row:has(> .ax-page-head__actions .dash-filtros) {
+  align-items: flex-start;
+}
+.dash-filtros {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--ax-space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.dash-filtro {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.dash-filtro > span {
+  font-size: var(--ax-text-xs);
+  font-weight: var(--ax-weight-semibold);
+  color: var(--ax-text-muted);
+}
+.dash-filtro--fuente .ax-select {
+  width: 210px;
+}
+
+@media (max-width: 767.98px) {
+  .ax-page-head__actions:has(.dash-filtros) {
+    margin-inline-start: 0;
+    width: 100%;
+  }
+  .dash-filtros {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+  .dash-filtro--fuente .ax-select {
+    width: 100%;
+  }
+}

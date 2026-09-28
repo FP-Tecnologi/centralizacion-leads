@@ -12,6 +12,7 @@ import { supabase } from '../lib/supabase';
 import { listarFuentes, type Fuente } from '../lib/leads/datos';
 import { ApexChart } from '../components/charts/ApexChart';
 import { PageHead } from '../components/shell/PageHead';
+import { RangoFechas } from '../components/ui/RangoFechas';
 import { Icon } from '../components/ui/Icon';
 
 interface Resumen {
@@ -61,29 +62,29 @@ export function Dashboard() {
 
   return (
     <>
-      <PageHead title="Dashboard" />
-      <div className="ax-filter-bar" style={{ marginBottom: 'var(--ax-space-4)' }}>
-        <label className="ax-field" style={{ minWidth: 220, flex: '0 0 auto' }}>
-          <span className="ax-field__label">Fuente</span>
-          <select className="ax-select" value={sel} onChange={(e) => setSel(e.target.value)}>
-            <option value="">Todas las fuentes</option>
-            {fuentes.map((f) => <option key={f.id} value={f.id}>{f.nombre}</option>)}
-          </select>
-        </label>
-        <label className="ax-field" style={{ minWidth: 170, flex: '0 0 auto' }}>
-          <span className="ax-field__label">Desde</span>
-          <input className="ax-input" type="date" value={desde} onChange={(e) => setDesde(e.target.value)} />
-        </label>
-        <label className="ax-field" style={{ minWidth: 170, flex: '0 0 auto' }}>
-          <span className="ax-field__label">Hasta</span>
-          <input className="ax-input" type="date" value={hasta} onChange={(e) => setHasta(e.target.value)} />
-        </label>
-        {hayFiltro && (
-          <button type="button" className="ax-btn ax-btn--ghost ax-btn--sm" style={{ flex: '0 0 auto' }} onClick={limpiar}>
-            Limpiar
-          </button>
-        )}
-      </div>
+      <PageHead
+        title="Dashboard"
+        actions={
+          <div className="dash-filtros" role="group" aria-label="Filtros del dashboard">
+            <label className="dash-filtro dash-filtro--fuente">
+              <span>Fuente</span>
+              <select className="ax-select ax-select--sm" value={sel} onChange={(e) => setSel(e.target.value)}>
+                <option value="">Todas las fuentes</option>
+                {fuentes.map((f) => <option key={f.id} value={f.id}>{f.nombre}</option>)}
+              </select>
+            </label>
+            <div className="dash-filtro dash-filtro--fechas">
+              <span>Fechas</span>
+              <RangoFechas desde={desde} hasta={hasta} onCambio={(d, h) => { setDesde(d); setHasta(h); }} />
+            </div>
+            {hayFiltro && (
+              <button type="button" className="ax-btn ax-btn--ghost ax-btn--sm dash-filtros__limpiar" onClick={limpiar}>
+                Limpiar
+              </button>
+            )}
+          </div>
+        }
+      />
       {error && <div className="ax-card" role="alert"><div className="ax-card__body">{error}</div></div>}
       {cargando && !r && !error && <p className="ax-text-subtle">Cargando…</p>}
       {r && (

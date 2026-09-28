@@ -1,0 +1,232 @@
+/*
+ * Sistema de Leads — selector de rango de fechas (components/ui/RangoFechas.tsx).
+ */
+.rf {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.rf__campo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ax-space-2);
+  width: 250px;
+  padding-inline-end: 28px;
+  text-align: start;
+  cursor: pointer;
+  color: var(--ax-text-subtle);
+}
+.rf__campo.has-valor {
+  color: var(--ax-text);
+}
+.rf__campo svg {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: var(--ax-text-subtle);
+}
+.rf__texto {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.rf__limpiar {
+  position: absolute;
+  inset-inline-end: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ax-text-subtle);
+  cursor: pointer;
+}
+.rf__limpiar:hover {
+  background: var(--ax-fill-hover);
+  color: var(--ax-text);
+}
+.rf__limpiar svg {
+  width: 14px;
+  height: 14px;
+}
+
+.rf__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  inset-inline-end: 0;
+  z-index: var(--ax-z-dropdown, 1000);
+  display: flex;
+  gap: var(--ax-space-3);
+  padding: var(--ax-space-3);
+  border: 1px solid var(--ax-border);
+  border-radius: var(--ax-radius-lg);
+  background: var(--ax-surface-solid, var(--ax-surface));
+  box-shadow: var(--ax-shadow-lg, 0 16px 40px rgba(0, 0, 0, 0.3));
+  animation: rf-entrada 140ms ease-out;
+}
+@keyframes rf-entrada {
+  from { opacity: 0; transform: translateY(-4px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rf__panel { animation: none; }
+}
+
+.rf__atajos {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 130px;
+  padding-inline-end: var(--ax-space-3);
+  border-inline-end: 1px solid var(--ax-border);
+}
+.rf__atajo {
+  padding: 7px 10px;
+  border: 0;
+  border-radius: var(--ax-radius-sm, 6px);
+  background: none;
+  color: var(--ax-text);
+  font: inherit;
+  font-size: var(--ax-text-sm);
+  text-align: start;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.rf__atajo:hover {
+  background: var(--ax-fill-hover);
+}
+.rf__atajo.is-activo {
+  color: var(--ax-accent);
+  background: rgba(var(--ax-accent-rgb), 0.1);
+  font-weight: var(--ax-weight-semibold);
+}
+
+.rf__cal {
+  width: 252px;
+}
+.rf__cab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-block-end: var(--ax-space-2);
+}
+.rf__mes {
+  font-weight: var(--ax-weight-semibold);
+  color: var(--ax-text-strong);
+}
+.rf__nav {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--ax-text-muted);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.rf__nav:hover {
+  background: var(--ax-fill-hover);
+  color: var(--ax-text);
+}
+.rf__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 36px);
+  row-gap: 2px;
+}
+.rf__dow {
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--ax-text-xs);
+  font-weight: var(--ax-weight-semibold);
+  color: var(--ax-text-subtle);
+}
+.rf__dia {
+  position: relative;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ax-text);
+  font: inherit;
+  font-size: var(--ax-text-sm);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.rf__dia:hover {
+  border-radius: 50%;
+  background: var(--ax-fill-hover);
+}
+.rf__dia.is-fuera {
+  color: var(--ax-text-subtle);
+  opacity: 0.55;
+}
+.rf__dia.is-hoy {
+  font-weight: var(--ax-weight-bold);
+  color: var(--ax-accent);
+}
+.rf__dia.is-rango {
+  border-radius: 0;
+  background: rgba(var(--ax-accent-rgb), 0.14);
+}
+.rf__dia.is-inicio,
+.rf__dia.is-fin {
+  color: var(--ax-on-accent, #fff);
+  background: var(--ax-accent);
+  font-weight: var(--ax-weight-semibold);
+}
+.rf__dia.is-inicio { border-radius: 50% 0 0 50%; }
+.rf__dia.is-fin { border-radius: 0 50% 50% 0; }
+.rf__dia.is-inicio.is-fin { border-radius: 50%; }
+.rf__ayuda {
+  margin: var(--ax-space-2) 0 0;
+  font-size: var(--ax-text-xs);
+  color: var(--ax-text-muted);
+  text-align: center;
+}
+
+@media (max-width: 767.98px) {
+  .rf,
+  .rf__campo {
+    width: 100%;
+  }
+  .rf__panel {
+    position: fixed;
+    top: auto;
+    bottom: var(--ax-space-3);
+    inset-inline: var(--ax-space-3);
+    flex-direction: column;
+    align-items: center;
+  }
+  .rf__atajos {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    min-width: 0;
+    padding: 0 0 var(--ax-space-3);
+    border-inline-end: 0;
+    border-block-end: 1px solid var(--ax-border);
+  }
+  .rf__atajo {
+    border: 1px solid var(--ax-border);
+    border-radius: var(--ax-radius-pill, 999px);
+    padding: 5px 12px;
+  }
+  .rf__grid {
+    grid-template-columns: repeat(7, minmax(36px, 44px));
+  }
+  .rf__cal {
+    width: auto;
+  }
+  .rf__dia {
+    height: 40px;
+  }
+}
