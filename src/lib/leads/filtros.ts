@@ -15,7 +15,7 @@ export const OPERADORES: Record<Operador, string> = {
 };
 
 const CLAVE_OK = /^[a-z0-9_]+$/i;
-const COLUMNAS_DIRECTAS = new Set(['status', 'created_at', 'actualizado_en', 'fuente_id']);
+const COLUMNAS_DIRECTAS = new Set(['status', 'evento', 'created_at', 'actualizado_en', 'fuente_id']);
 
 export function columna(campo: string): string {
   if (!CLAVE_OK.test(campo)) throw new Error(`campo inválido: ${campo}`);

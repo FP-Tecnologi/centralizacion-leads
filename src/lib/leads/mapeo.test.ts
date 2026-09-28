@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { claveDestinoSegura, construirFilas, inferirTipo, labelParaClaveSobrante, normalizarEncabezado, sugerirMapeo } from './mapeo';
+import {
+  claveDestinoSegura, construirFilas, describirErrorServidor, inferirTipo, labelParaClaveSobrante, limpiarDocumento, normalizarEncabezado,
+  separarCorreos, separarTelefonos, sugerirMapeo,
+} from './mapeo';
 import type { CampoFormulario } from '../../../supabase/functions/_shared/lead';
 
 const campos: CampoFormulario[] = [{ key: 'ciudad', label: 'Ciudad', tipo: 'texto', requerido: false }];
@@ -189,5 +192,146 @@ describe('labelParaClaveSobrante', () => {
 
   it('sin match, devuelve la clave tal cual', () => {
     expect(labelParaClaveSobrante('algo_2', { Celular: 'telefono' })).toBe('algo_2');
+  });
+});
+
+// Encabezados reales del consolidado de EXPOMINA 2026 (CSV y XLSX que mandó el usuario).
+const ENCABEZADOS_EXPOMINA = [
+  'ID', 'Fecha', 'Nombres / Contacto', 'Apellidos', 'Cargo', 'RUC / DNI', 'Empresa / Cliente', 'Rubro', 'Teléfono',
+  'Email', 'Necesidad Detectada', 'Próxima Acción', 'Evento', 'Estado', 'Fecha de nacimiento', 'Fuente',
+];
+
+describe('sugerirMapeo — consolidado EXPOMINA', () => {
+  it('cada columna va a su campo; ninguna choca con un nombre reservado', () => {
+    expect(sugerirMapeo(ENCABEZADOS_EXPOMINA, [])).toEqual({
+      ID: null,
+      Fecha: 'created_at',
+      'Nombres / Contacto': 'nombres',
+      Apellidos: 'apellido',
+      Cargo: 'cargo',
+      'RUC / DNI': 'ruc',
+      'Empresa / Cliente': 'empresa',
+      Rubro: 'rubro',
+      'Teléfono': 'telefono',
+      Email: 'email',
+      'Necesidad Detectada': 'necesidad_detectada',
+      'Próxima Acción': 'proxima_accion',
+      Evento: 'evento',
+      Estado: 'status',
+      'Fecha de nacimiento': 'fecha_nacimiento',
+      Fuente: 'fuente_origen',
+    });
+  });
+
+  it('reglas por palabra: "Nombre de la empresa" es empresa, "Cargo en la empresa" es cargo, "Correo empresa" es correo', () => {
+    expect(sugerirMapeo(['Nombre de la empresa', 'Cargo en la empresa', 'Correo empresa', 'Teléfono / Celular', 'Fecha de registro'], [])).toEqual({
+      'Nombre de la empresa': 'empresa', 'Cargo en la empresa': 'cargo', 'Correo empresa': 'email',
+      'Teléfono / Celular': 'telefono', 'Fecha de registro': 'created_at',
+    });
+  });
+
+  it('reusa una columna extra ya registrada por su label', () => {
+    expect(sugerirMapeo(['Necesidad'], [], [{ key: 'necesidad_detectada', label: 'Necesidad' }])).toEqual({ Necesidad: 'necesidad_detectada' });
+  });
+
+  it('una columna nueva que normaliza a un nombre reservado se sufija', () => {
+    expect(sugerirMapeo(['User agent'], [])).toEqual({ 'User agent': 'user_agent_2' });
+  });
+});
+
+describe('construirFilas — datos reales de un consolidado', () => {
+  const mapeo = sugerirMapeo(ENCABEZADOS_EXPOMINA, []);
+  const fila = (d: Record<string, string>) => ({ datos: Object.fromEntries(ENCABEZADOS_EXPOMINA.map((h) => [h, d[h] ?? ''])) });
+
+  it('fecha en serial de Excel, estado y evento van a su columna; lo demás a extra', () => {
+    const r = construirFilas([fila({
+      ID: '2', Fecha: '46281', 'Nombres / Contacto': 'Fernando', Apellidos: 'Aguilar', 'RUC / DNI': '07627328',
+      'Empresa / Cliente': 'Praeveni', 'Teléfono': '913023553', Email: 'fernando@praeveni.com.pe',
+      'Necesidad Detectada': 'Cámaras', Evento: 'Semana de Ingeniería Geológica', Estado: 'Nuevo',
+      'Fecha de nacimiento': '24/08/1972', Fuente: 'leads-expomina.xlsx',
+    })], mapeo, []);
+    expect(r.errores).toEqual([]);
+    expect(r.validas[0].lead).toEqual({
+      nombres: 'Fernando', apellido: 'Aguilar', ruc: '07627328', empresa: 'Praeveni', telefono: '913023553',
+      email: 'fernando@praeveni.com.pe', fecha_nacimiento: '1972-08-24',
+      created_at: '2026-09-16', status: 'nuevo', evento: 'Semana de Ingeniería Geológica',
+      extra: { necesidad_detectada: 'Cámaras', fuente_origen: 'leads-expomina.xlsx' },
+    });
+  });
+
+  it('varios teléfonos en una celda: el primero a Teléfono, el resto a telefono_2', () => {
+    const r = construirFilas([fila({ 'Nombres / Contacto': 'Luis', 'Teléfono': '914 117 489 / 997 589 940 |' })], mapeo, []);
+    expect(r.validas[0].lead.telefono).toBe('914117489');
+    expect(r.validas[0].lead.extra.telefono_2).toBe('997589940');
+  });
+
+  it('correo con espacios adentro se limpia en vez de rechazarse', () => {
+    const r = construirFilas([fila({ Email: 'ventas @rrhpart.com' })], mapeo, []);
+    expect(r.validas[0].lead.email).toBe('ventas@rrhpart.com');
+  });
+
+  it('fila sin correo ni teléfono: error con causa legible', () => {
+    const r = construirFilas([fila({ 'Nombres / Contacto': 'Pedro' })], mapeo, []);
+    expect(r.errores[0].causas).toEqual(['Sin correo ni teléfono: se necesita al menos uno para guardar el lead']);
+  });
+
+  it('estado desconocido y teléfono inválido: la causa dice el valor y qué se espera', () => {
+    const r = construirFilas([fila({ Email: 'a@x.com', Estado: 'ganado', 'Teléfono': '123' })], mapeo, []);
+    expect(r.errores[0].causas).toEqual([
+      'Teléfono "123" no es un teléfono válido (6 a 15 dígitos, puede empezar con +)',
+      'Estado "ganado" no es válido (usa: nuevo, contactado, asistio, descartado)',
+    ]);
+  });
+
+  it('campos obligatorios de la fuente: bloquean solo si exigirRequeridos', () => {
+    const campos: CampoFormulario[] = [{ key: 'ruc', label: 'RUC / DNI', tipo: 'documento', requerido: true }];
+    const filas = [fila({ Email: 'a@x.com' })];
+    expect(construirFilas(filas, mapeo, campos).errores[0].causas).toEqual(['RUC / DNI está vacío y es obligatorio en esta fuente']);
+    expect(construirFilas(filas, mapeo, campos, {}, { exigirRequeridos: false }).validas).toHaveLength(1);
+  });
+
+  it('DNI que perdió el cero inicial en Excel se completa a 8 dígitos', () => {
+    const campos: CampoFormulario[] = [{ key: 'ruc', label: 'RUC / DNI', tipo: 'documento', requerido: false }];
+    const r = construirFilas([fila({ Email: 'a@x.com', 'RUC / DNI': '7627328' })], mapeo, campos);
+    expect(r.validas[0].lead.ruc).toBe('07627328');
+  });
+
+  it('fecha extra en serial se convierte cuando la columna está tipada como fecha', () => {
+    const r = construirFilas([{ datos: { Email: 'a@x.com', 'Fecha de visita': '46281' } }], { Email: 'email', 'Fecha de visita': 'fecha_de_visita' }, [], { fecha_de_visita: 'fecha' });
+    expect(r.validas[0].lead.extra.fecha_de_visita).toBe('2026-09-16');
+  });
+});
+
+describe('limpieza de valores', () => {
+  it('separarTelefonos', () => {
+    expect(separarTelefonos('946569075_946560073')).toEqual(['946569075', '946560073']);
+    expect(separarTelefonos('Cel 989 670 737')).toEqual(['989670737']);
+    expect(separarTelefonos('+51 908 807 157 / +51 984 169 469')).toEqual(['+51908807157', '+51984169469']);
+    expect(separarTelefonos('(01) 234-5678')).toEqual(['012345678']);
+    expect(separarTelefonos('no tiene')).toEqual(['no tiene']);
+  });
+  it('separarCorreos', () => {
+    expect(separarCorreos('Ana@X.com; luis@x.com')).toEqual(['ana@x.com', 'luis@x.com']);
+    expect(separarCorreos('jose.sandoval@enduria .com.pe')).toEqual(['jose.sandoval@enduria.com.pe']);
+  });
+  it('limpiarDocumento', () => {
+    expect(limpiarDocumento('20.613.344.548')).toBe('20613344548');
+    expect(limpiarDocumento('7627328')).toBe('07627328');
+    expect(limpiarDocumento('10075977145.0')).toBe('10075977145');
+    expect(limpiarDocumento('CE 001234')).toBe('CE 001234');
+  });
+  it('describirErrorServidor traduce los códigos de upsert_lead', () => {
+    expect(describirErrorServidor('fila_sin_contacto')).toMatch(/Sin correo ni teléfono/);
+    expect(describirErrorServidor('estado_invalido')).toMatch(/Estado no válido/);
+    expect(describirErrorServidor('algo raro')).toBe('Error del servidor: algo raro');
+  });
+});
+
+describe('inferirTipo — serial de Excel', () => {
+  it('columna "Fecha de visita" con seriales es fecha', () => {
+    expect(inferirTipo(['46281', '46276'], 'Fecha de visita')).toBe('fecha');
+  });
+  it('sin encabezado de fecha, un número sigue siendo número', () => {
+    expect(inferirTipo(['46281', '46276'], 'Cantidad')).toBe('numero');
   });
 });

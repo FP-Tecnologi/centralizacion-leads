@@ -30,6 +30,7 @@ const COLUMNAS_BASE = [
   { key: 'rubro', label: 'Rubro' },
   { key: 'fecha_nacimiento', label: 'Fecha de nacimiento' },
   { key: 'fuente', label: 'Fuente' },
+  { key: 'evento', label: 'Evento' },
   { key: 'status', label: 'Estado' },
   { key: 'created_at', label: 'Registrado' },
 ];

@@ -43,6 +43,7 @@ const BASE: Columna[] = [
   { key: 'rubro', label: 'Rubro', orden: 'rubro' },
   { key: 'ruc', label: 'RUC/DNI' },
   { key: 'fuente', label: 'Fuente', render: (l: Lead) => l.fuentes?.nombre ?? '—' },
+  { key: 'evento', label: 'Evento', orden: 'evento' },
   { key: 'status', label: 'Estado', orden: 'status' },
   { key: 'created_at', label: 'Registrado', orden: 'created_at', render: (l: Lead) => new Date(l.created_at).toLocaleString('es-PE') },
 ];
