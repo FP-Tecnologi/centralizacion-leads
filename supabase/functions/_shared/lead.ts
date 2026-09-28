@@ -7,7 +7,9 @@ export const NUCLEO = [
 ] as const;
 export type CampoNucleo = typeof NUCLEO[number];
 export type TipoCampo = 'texto' | 'email' | 'telefono' | 'fecha' | 'numero' | 'opcion' | 'documento';
-export interface CampoFormulario { key: string; label: string; tipo: TipoCampo; requerido: boolean; opciones?: string[] }
+// `placeholder` solo lo usa el formulario público de las landings del CMS
+// (src/components/landings); la validación lo ignora.
+export interface CampoFormulario { key: string; label: string; tipo: TipoCampo; requerido: boolean; opciones?: string[]; placeholder?: string }
 export interface LeadEntrada { [k: string]: unknown; extra: Record<string, string> }
 export interface ErrorCampo { campo: string; motivo: 'requerido' | 'formato' | 'contacto' }
 
