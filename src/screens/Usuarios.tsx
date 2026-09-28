@@ -6,6 +6,7 @@
  * para cuentas que quien mira puede gestionar (`gestionable`, calculado allá).
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { EnBody } from '../components/ui/EnBody';
 import { useAuth, type Rol } from '../context/AuthContext';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { listarFuentes, type Fuente } from '../lib/leads/datos';
@@ -234,9 +235,10 @@ function ModalBase({ titulo, children, pie, onCerrar, onSubmit }: {
   const ref = useRef<HTMLFormElement>(null);
   useFocusTrap(ref, true);
   return (
+    <EnBody>
     <div onKeyDown={(e) => e.key === 'Escape' && onCerrar()}>
-      <button type="button" aria-hidden="true" tabIndex={-1} className="ax-backdrop" onClick={onCerrar} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,.4)', border: 0 }} />
-      <div className="ax-flex" role="dialog" aria-modal="true" aria-label={titulo} style={{ position: 'fixed', inset: 0, zIndex: 51, alignItems: 'center', justifyContent: 'center', padding: 'var(--ax-space-4)', pointerEvents: 'none' }}>
+      <button type="button" aria-hidden="true" tabIndex={-1} className="ax-backdrop" onClick={onCerrar} style={{ position: 'fixed', inset: 0, zIndex: 'var(--ax-z-modal)', background: 'rgba(0,0,0,.45)', border: 0 }} />
+      <div className="ax-flex" role="dialog" aria-modal="true" aria-label={titulo} style={{ position: 'fixed', inset: 0, zIndex: 'calc(var(--ax-z-modal) + 1)', alignItems: 'center', justifyContent: 'center', padding: 'var(--ax-space-4)', pointerEvents: 'none' }}>
         <form className="ax-card" ref={ref} onSubmit={(e) => { e.preventDefault(); onSubmit(); }}
           style={{ width: 'min(520px,100%)', maxHeight: '90vh', overflow: 'auto', pointerEvents: 'auto' }}>
           <div className="ax-card__header">
@@ -250,6 +252,7 @@ function ModalBase({ titulo, children, pie, onCerrar, onSubmit }: {
         </form>
       </div>
     </div>
+    </EnBody>
   );
 }
 

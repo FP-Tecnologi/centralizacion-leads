@@ -7,6 +7,7 @@
  * `invalidos` (la tabla lo pinta) y una marca desaparece cuando el dato queda bien.
  */
 import { useMemo, useRef, useState } from 'react';
+import { EnBody } from '../ui/EnBody';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { actualizarLead, ESTADOS, type ColumnaExtra, type Fuente, type Lead } from '../../lib/leads/datos';
 import { NUCLEO, separarLead, validarLead, type ErrorCampo } from '../../../supabase/functions/_shared/lead';
@@ -99,9 +100,10 @@ export function EditarLeadModal({
   };
 
   return (
+    <EnBody>
     <div onKeyDown={(e) => e.key === 'Escape' && onCerrar()}>
-      <button type="button" aria-hidden="true" tabIndex={-1} className="ax-backdrop" onClick={onCerrar} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,.4)', border: 0 }} />
-      <div className="ax-flex" role="dialog" aria-modal="true" aria-label="Editar lead" style={{ position: 'fixed', inset: 0, zIndex: 51, alignItems: 'center', justifyContent: 'center', padding: 'var(--ax-space-4)' }}>
+      <button type="button" aria-hidden="true" tabIndex={-1} className="ax-backdrop" onClick={onCerrar} style={{ position: 'fixed', inset: 0, zIndex: 'var(--ax-z-modal)', background: 'rgba(0,0,0,.45)', border: 0 }} />
+      <div className="ax-flex" role="dialog" aria-modal="true" aria-label="Editar lead" style={{ position: 'fixed', inset: 0, zIndex: 'calc(var(--ax-z-modal) + 1)', alignItems: 'center', justifyContent: 'center', padding: 'var(--ax-space-4)' }}>
         <form
           className="ax-card"
           ref={ref}
@@ -203,6 +205,7 @@ export function EditarLeadModal({
         </form>
       </div>
     </div>
+    </EnBody>
   );
 }
 

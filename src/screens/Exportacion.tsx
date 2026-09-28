@@ -8,6 +8,7 @@
  * "mostrar clave una sola vez + copiar").
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { EnBody } from '../components/ui/EnBody';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -180,9 +181,10 @@ function NuevaAplicacionModal({ fuentes, onCerrar, onCreada }: { fuentes: Fuente
   const copiarClave = () => { if (clave) navigator.clipboard?.writeText(clave).catch(() => {}); };
 
   return (
+    <EnBody>
     <div onKeyDown={(e) => e.key === 'Escape' && onCerrar()}>
-      <button type="button" aria-hidden="true" tabIndex={-1} className="ax-backdrop" onClick={onCerrar} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,.4)', border: 0 }} />
-      <div className="ax-flex" role="dialog" aria-modal="true" aria-label="Nueva aplicación" style={{ position: 'fixed', inset: 0, zIndex: 51, alignItems: 'center', justifyContent: 'center', padding: 'var(--ax-space-4)' }}>
+      <button type="button" aria-hidden="true" tabIndex={-1} className="ax-backdrop" onClick={onCerrar} style={{ position: 'fixed', inset: 0, zIndex: 'var(--ax-z-modal)', background: 'rgba(0,0,0,.45)', border: 0 }} />
+      <div className="ax-flex" role="dialog" aria-modal="true" aria-label="Nueva aplicación" style={{ position: 'fixed', inset: 0, zIndex: 'calc(var(--ax-z-modal) + 1)', alignItems: 'center', justifyContent: 'center', padding: 'var(--ax-space-4)' }}>
         <form
           className="ax-card"
           ref={ref}
@@ -265,6 +267,7 @@ function NuevaAplicacionModal({ fuentes, onCerrar, onCreada }: { fuentes: Fuente
         </form>
       </div>
     </div>
+    </EnBody>
   );
 }
 

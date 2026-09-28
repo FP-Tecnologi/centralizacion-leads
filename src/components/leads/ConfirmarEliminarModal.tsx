@@ -4,6 +4,7 @@
  * Markup portado de EditarLeadModal: role="dialog", aria-modal, focus trap, Escape.
  */
 import { useRef, useState } from 'react';
+import { EnBody } from '../ui/EnBody';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { eliminarLeads } from '../../lib/leads/datos';
 
@@ -39,9 +40,10 @@ export function ConfirmarEliminarModal({
   };
 
   return (
+    <EnBody>
     <div onKeyDown={(e) => e.key === 'Escape' && onCerrar()}>
-      <button type="button" aria-hidden="true" tabIndex={-1} className="ax-backdrop" onClick={onCerrar} style={{ position: 'fixed', inset: 0, zIndex: 50, background: 'rgba(0,0,0,.4)', border: 0 }} />
-      <div className="ax-flex" role="dialog" aria-modal="true" aria-label={titulo} ref={ref} style={{ position: 'fixed', inset: 0, zIndex: 51, alignItems: 'center', justifyContent: 'center', padding: 'var(--ax-space-4)' }}>
+      <button type="button" aria-hidden="true" tabIndex={-1} className="ax-backdrop" onClick={onCerrar} style={{ position: 'fixed', inset: 0, zIndex: 'var(--ax-z-modal)', background: 'rgba(0,0,0,.45)', border: 0 }} />
+      <div className="ax-flex" role="dialog" aria-modal="true" aria-label={titulo} ref={ref} style={{ position: 'fixed', inset: 0, zIndex: 'calc(var(--ax-z-modal) + 1)', alignItems: 'center', justifyContent: 'center', padding: 'var(--ax-space-4)' }}>
         <div className="ax-card" onClick={(e) => e.stopPropagation()} style={{ width: 'min(440px,100%)' }}>
           <div className="ax-card__header">
             <div className="ax-card__titles"><h2 className="ax-card__title">{titulo}</h2></div>
@@ -63,6 +65,7 @@ export function ConfirmarEliminarModal({
         </div>
       </div>
     </div>
+    </EnBody>
   );
 }
 

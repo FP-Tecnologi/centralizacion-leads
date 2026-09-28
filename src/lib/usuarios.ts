@@ -3,7 +3,7 @@
  * Las reglas de quién gestiona a quién viven en la función (y en el trigger
  * _proteger_perfiles); aquí solo se replican para ocultar acciones en la UI.
  */
-import { FunctionsHttpError } from '@supabase/supabase-js';
+import { FunctionsFetchError, FunctionsHttpError, FunctionsRelayError } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import type { Rol } from '../context/AuthContext';
 
@@ -41,6 +41,9 @@ const MENSAJES: Record<string, string> = {
   datos_invalidos: 'Revisa los datos ingresados.',
   no_puedes_contigo: 'No puedes hacer esto con tu propia cuenta.',
   no_autenticado: 'Tu sesión expiró. Vuelve a ingresar.',
+  sin_desplegar: 'La gestión de usuarios aún no está activa: falta desplegar la función "admin-usuarios" en Supabase.',
+  sin_conexion: 'No se pudo conectar con el servidor de usuarios. Revisa tu conexión e intenta de nuevo.',
+  error_interno: 'El servidor de usuarios tuvo un error. Intenta de nuevo en unos minutos.',
 };
 
 async function llamar<T>(body: Record<string, unknown>): Promise<T> {
@@ -52,6 +55,10 @@ async function llamar<T>(body: Record<string, unknown>): Promise<T> {
       const r = await error.context.json().catch(() => ({}));
       codigo = r.error ?? '';
       detalle = r.detalle ?? '';
+      // la función no existe en el proyecto de Supabase (todavía no se desplegó)
+      if (error.context.status === 404 && r.code === 'NOT_FOUND') codigo = 'sin_desplegar';
+    } else if (error instanceof FunctionsFetchError || error instanceof FunctionsRelayError) {
+      codigo = 'sin_conexion';
     }
     const msg = MENSAJES[codigo] ?? 'No se pudo completar la acción. Intenta de nuevo.';
     throw new Error(detalle && codigo === 'invitacion_fallida' ? `${msg} (${detalle})` : msg);
