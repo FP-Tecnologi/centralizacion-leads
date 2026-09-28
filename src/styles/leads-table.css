@@ -1,24 +1,31 @@
 /*
  * Sistema de Leads — cabecera de la tabla de leads (components/leads/LeadsTable.tsx):
- * título + total arriba, y una barra con buscador a la izquierda y
- * Filtros · A revisar · Columnas alineados a la derecha. En móvil el buscador
- * ocupa todo el ancho y los tres botones se reparten una fila pareja.
+ * una sola fila con el título a la izquierda y, a la derecha, buscador · A revisar ·
+ * Columnas · Filtros (Filtros en el extremo derecho), centrados verticalmente con el
+ * título. En móvil: título arriba, buscador a todo el ancho y los botones en fila pareja.
  */
 .lt-head {
   align-items: center;
-  padding-block-end: var(--ax-space-4);
+  flex-wrap: wrap;
+  row-gap: var(--ax-space-3);
 }
-.lt-toolbar {
+/* flex-basis 560px: si el título + las herramientas no entran en la fila de la tarjeta,
+   las herramientas bajan juntas debajo del título (según el ancho real, no el de pantalla). */
+.lt-tools {
   display: flex;
   align-items: center;
-  gap: var(--ax-space-3);
-  padding: 0 var(--ax-space-6) var(--ax-space-4);
+  gap: var(--ax-space-2);
+  flex: 1 1 560px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+.lt-tools .ax-btn {
+  white-space: nowrap;
 }
 .lt-search {
   position: relative;
-  flex: 1 1 auto;
-  max-width: 420px;
-  min-width: 0;
+  flex: 0 1 300px;
+  min-width: 180px;
 }
 .lt-search svg {
   position: absolute;
@@ -34,16 +41,6 @@
   width: 100%;
   padding-inline-start: 34px;
 }
-.lt-tools {
-  display: flex;
-  align-items: center;
-  gap: var(--ax-space-2);
-  flex-wrap: nowrap;
-  margin-inline-start: auto;
-}
-.lt-tools .ax-btn {
-  white-space: nowrap;
-}
 .lt-chips {
   padding: 0 var(--ax-space-6) var(--ax-space-4);
 }
@@ -55,30 +52,112 @@
   .lt-head {
     padding: var(--ax-space-4) var(--ax-space-4) var(--ax-space-3);
   }
-  .lt-toolbar {
+  .lt-tools {
     flex-wrap: wrap;
-    padding: 0 var(--ax-space-4) var(--ax-space-3);
   }
   .lt-search {
     flex-basis: 100%;
     max-width: none;
+    margin-inline-end: 0;
   }
-  .lt-tools {
-    width: 100%;
-    margin-inline-start: 0;
-  }
-  /* los tres controles se reparten el ancho por igual */
-  .lt-tools > .ax-btn,
-  .lt-tools > .ax-dropdown-wrap {
+  /* A revisar · Columnas · Filtros se reparten el ancho; Exportar (si está aquí) queda
+     como ícono. Sin íconos en esos tres para que el texto entre completo. */
+  .lt-tools > .ax-btn {
     flex: 1 1 0;
     min-width: 0;
-  }
-  .lt-tools > .ax-dropdown-wrap > .ax-btn,
-  .lt-tools > .ax-btn {
-    width: 100%;
     justify-content: center;
+    padding-inline: var(--ax-space-2);
+  }
+  .lt-tools > .ax-btn .ax-btn__icon {
+    display: none;
+  }
+  .lt-tools > .ax-dropdown-wrap {
+    flex: 0 0 auto;
+  }
+  .lt-tools > .ax-dropdown-wrap .ax-btn__label {
+    display: none;
   }
   .lt-chips {
     padding: 0 var(--ax-space-4) var(--ax-space-3);
   }
+}
+
+/* ── panel lateral de columnas (components/leads/ColumnasMenu.tsx) ── */
+.col-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ax-space-4);
+}
+.col-panel__contador {
+  margin: 2px 0 0;
+  font-size: var(--ax-text-sm);
+  color: var(--ax-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.col-panel__grupo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ax-space-1);
+}
+.col-panel__cab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ax-space-2);
+  padding-block-end: var(--ax-space-1);
+  border-block-end: 1px solid var(--ax-border);
+}
+.col-panel__nombre {
+  font-size: var(--ax-text-xs);
+  font-weight: var(--ax-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ax-text-muted);
+}
+.col-panel__n {
+  margin-inline-start: 4px;
+  font-weight: var(--ax-weight-regular, 400);
+  color: var(--ax-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+.col-panel__acciones {
+  display: flex;
+  gap: var(--ax-space-1);
+}
+.col-panel__acciones button {
+  padding: 2px 8px;
+  border: 0;
+  border-radius: var(--ax-radius-sm, 6px);
+  background: none;
+  color: var(--ax-link, var(--ax-accent));
+  font: inherit;
+  font-size: var(--ax-text-xs);
+  font-weight: var(--ax-weight-semibold);
+  cursor: pointer;
+}
+.col-panel__acciones button:hover:not(:disabled) {
+  background: rgba(var(--ax-accent-rgb), 0.1);
+}
+.col-panel__acciones button:disabled {
+  color: var(--ax-text-subtle);
+  cursor: default;
+}
+.col-panel__lista {
+  display: flex;
+  flex-direction: column;
+}
+.col-panel__item {
+  display: flex;
+  align-items: center;
+  gap: var(--ax-space-3);
+  padding: 8px var(--ax-space-2);
+  border-radius: var(--ax-radius-md);
+  color: var(--ax-text-muted);
+  cursor: pointer;
+}
+.col-panel__item:hover {
+  background: var(--ax-fill-hover);
+}
+.col-panel__item.is-on {
+  color: var(--ax-text);
 }

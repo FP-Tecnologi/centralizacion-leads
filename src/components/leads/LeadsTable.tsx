@@ -343,31 +343,25 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
     <>
       <div className="ax-dash-grid">
         <section className="ax-card ax-col--12" role="region" aria-label="Tabla de leads">
+          {/* Una sola fila: título a la izquierda; a la derecha buscador · A revisar · Columnas · Filtros
+              (Filtros queda en el extremo derecho). En móvil el título arriba y las herramientas debajo. */}
           <div className="ax-card__header lt-head">
             <div className="ax-card__titles">
               <h2 className="ax-card__title">Leads</h2>
               <p className="ax-card__subtitle ax-num">{total} en total</p>
             </div>
-            {!exportarSlotEl && <div className="ax-card__actions">{exportarMenu}</div>}
-          </div>
-
-          <div className="lt-toolbar">
-            <div className="lt-search">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" /><path d="M21 21l-6 -6" /></svg>
-              <input
-                type="search"
-                className="ax-input ax-input--sm"
-                placeholder="Buscar nombre, correo, empresa…"
-                value={qInput}
-                onChange={(e) => setQInput(e.target.value)}
-                aria-label="Buscar leads"
-              />
-            </div>
             <div className="lt-tools">
-              <button type="button" className={`ax-btn ax-btn--sm ${contadorFiltros > 0 ? 'ax-btn--primary' : 'ax-btn--secondary'}`} onClick={() => setPanelAbierto(true)} aria-expanded={panelAbierto}>
-                <svg className="ax-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 6l16 0" /><path d="M10 12l4 0" /><path d="M8 18l8 0" /></svg>
-                <span className="ax-btn__label">Filtros{contadorFiltros > 0 ? ` (${contadorFiltros})` : ''}</span>
-              </button>
+              <div className="lt-search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" /><path d="M21 21l-6 -6" /></svg>
+                <input
+                  type="search"
+                  className="ax-input ax-input--sm"
+                  placeholder="Buscar nombre, correo, empresa…"
+                  value={qInput}
+                  onChange={(e) => setQInput(e.target.value)}
+                  aria-label="Buscar leads"
+                />
+              </div>
               <button
                 type="button"
                 className={`ax-btn ax-btn--sm ${filtro.aRevisar ? 'ax-btn--primary' : 'ax-btn--secondary'}`}
@@ -379,6 +373,11 @@ export function LeadsTable({ fuenteFija }: { fuenteFija?: Fuente }) {
                 <span className="ax-btn__label">A revisar</span>
               </button>
               <ColumnasMenu columnas={columnas.map(({ key, label, grupo }) => ({ key, label, grupo }))} visibles={visibles} onCambiar={setVisibles} />
+              <button type="button" className={`ax-btn ax-btn--sm ${contadorFiltros > 0 ? 'ax-btn--primary' : 'ax-btn--secondary'}`} onClick={() => setPanelAbierto(true)} aria-expanded={panelAbierto}>
+                <svg className="ax-btn__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 6l16 0" /><path d="M10 12l4 0" /><path d="M8 18l8 0" /></svg>
+                <span className="ax-btn__label">Filtros{contadorFiltros > 0 ? ` (${contadorFiltros})` : ''}</span>
+              </button>
+              {!exportarSlotEl && exportarMenu}
             </div>
           </div>
 
