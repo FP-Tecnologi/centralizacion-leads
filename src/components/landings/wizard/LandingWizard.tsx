@@ -1,7 +1,7 @@
 'use client';
 /*
  * Sistema de Leads — asistente del CMS de landings (/landings/nueva y
- * /landings/[slug]/editar). Cinco pasos:
+ * /landings/[slug], la página "Gestionar"). Cinco pasos:
  *   1 Diseño (plantilla; nombre y dirección si es nueva)
  *   2 Contenido y colores
  *   3 Formulario
@@ -11,7 +11,7 @@
  *
  * Todo se edita en memoria y se guarda junto con "Guardar" (RPC guardar_landing):
  * una landing nueva se crea en el primer guardado (insert en `fuentes`, solo
- * admin por RLS) y la URL pasa a /landings/<slug>/editar conservando el paso.
+ * admin por RLS) y la URL pasa a /landings/<slug> conservando el paso.
  * Permisos: crear = admin/superadmin; editar = puede_editar_fuente (admin o
  * editor asignado); publicar = admin/superadmin (lo impone también la base).
  */
@@ -187,7 +187,7 @@ export function LandingWizard({ slug, pasoInicial = 0 }: { slug?: string; pasoIn
       setMensaje({ tipo: 'ok', texto: publicar === true ? '¡Listo! La landing está publicada.' : publicar === false ? 'La landing ya no es visible.' : 'Cambios guardados.' });
       if (!fuente) {
         setFuente(f);
-        router.replace(`/landings/${f.slug}/editar?paso=${paso}`);
+        router.replace(`/landings/${f.slug}?paso=${paso}`);
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String((e as { message?: string })?.message ?? '');
@@ -207,11 +207,11 @@ export function LandingWizard({ slug, pasoInicial = 0 }: { slug?: string; pasoIn
   return (
     <>
       <PageHead
-        title={nueva ? 'Nueva landing' : `Editar · ${fuente?.nombre ?? ''}`}
+        title={nueva ? 'Nueva landing' : `Gestionar · ${fuente?.nombre ?? ''}`}
         subtitle={DESCRIPCION[paso]}
         actions={
           <div className="ax-cluster" style={{ gap: 'var(--ax-space-2)', flexWrap: 'wrap' }}>
-            {!nueva && <Link className="ax-btn ax-btn--ghost" href={`/landings/${slugFinal}`}>Datos y clave</Link>}
+            {!nueva && <Link className="ax-btn ax-btn--ghost" href={`/landings/${slugFinal}/configuracion`}>Configuración</Link>}
             <button type="button" className="ax-btn ax-btn--primary" disabled={ocupado || (!sucio && !nueva)} onClick={() => guardar()}>
               {ocupado ? 'Guardando…' : nueva ? 'Crear borrador' : sucio ? 'Guardar cambios' : 'Guardado'}
             </button>

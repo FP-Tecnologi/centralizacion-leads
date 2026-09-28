@@ -97,11 +97,15 @@ function TodasFuentesLeaf({ base, label, level, activeSlug }: { base: string; la
   );
 }
 
-/* Submenú por fuente (nivel 2): Gestionar / Registros. */
+/* Submenú por fuente (nivel 2). Landings: Gestionar (editor visual) / Configuración
+   (datos y conexión) / Registros. Apps offline: Gestionar / Registros. */
 function FuenteSubgrupo({ f, base, level, activeSlug }: { f: Fuente; base: string; level: number; activeSlug: string }) {
-  const slugGestionar = `${base}/${f.slug}`;
-  const slugRegistros = `${base}/${f.slug}/registros`;
-  const containsActive = activeSlug === slugGestionar || activeSlug === slugRegistros;
+  const items = [
+    { slug: `${base}/${f.slug}`, label: 'Gestionar' },
+    ...(base === 'landings' ? [{ slug: `${base}/${f.slug}/configuracion`, label: 'Configuración' }] : []),
+    { slug: `${base}/${f.slug}/registros`, label: 'Registros' },
+  ];
+  const containsActive = items.some((i) => i.slug === activeSlug);
   const [open, setOpen] = useState(containsActive);
   const isOpen = open || containsActive;
   const parentCls = ['ax-nav__item', 'ax-nav__item--parent', 'ax-nav__item--child'];
@@ -114,26 +118,19 @@ function FuenteSubgrupo({ f, base, level, activeSlug }: { f: Fuente; base: strin
         {CARET}
       </button>
       <div className="ax-nav__children" role="group" data-ax-collapse-panel hidden={!isOpen}>
-        <Link
-          className={`ax-nav__item ax-nav__item--child${activeSlug === slugGestionar ? ' ax-nav__item--active is-active' : ''}`}
-          role="treeitem"
-          aria-level={level + 1}
-          aria-current={activeSlug === slugGestionar ? 'page' : undefined}
-          href={`/${slugGestionar}`}
-        >
-          <span className="ax-nav__bar" aria-hidden="true"></span>
-          <span className="ax-nav__label">Gestionar</span>
-        </Link>
-        <Link
-          className={`ax-nav__item ax-nav__item--child${activeSlug === slugRegistros ? ' ax-nav__item--active is-active' : ''}`}
-          role="treeitem"
-          aria-level={level + 1}
-          aria-current={activeSlug === slugRegistros ? 'page' : undefined}
-          href={`/${slugRegistros}`}
-        >
-          <span className="ax-nav__bar" aria-hidden="true"></span>
-          <span className="ax-nav__label">Registros</span>
-        </Link>
+        {items.map((i) => (
+          <Link
+            key={i.slug}
+            className={`ax-nav__item ax-nav__item--child${activeSlug === i.slug ? ' ax-nav__item--active is-active' : ''}`}
+            role="treeitem"
+            aria-level={level + 1}
+            aria-current={activeSlug === i.slug ? 'page' : undefined}
+            href={`/${i.slug}`}
+          >
+            <span className="ax-nav__bar" aria-hidden="true"></span>
+            <span className="ax-nav__label">{i.label}</span>
+          </Link>
+        ))}
       </div>
     </div>
   );

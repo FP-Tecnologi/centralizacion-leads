@@ -24,7 +24,7 @@ const TEXTOS = {
 type ModalState = { modo: 'nueva' } | { modo: 'duplicar'; fuente: Fuente } | null;
 
 export function FuentesLista({ tipo }: { tipo: 'landing' | 'offline' }) {
-  const { esAdmin, puedeEditar } = useAuth();
+  const { esAdmin } = useAuth();
   const router = useRouter();
   const t = TEXTOS[tipo];
   const [fuentes, setFuentes] = useState<Fuente[]>([]);
@@ -101,10 +101,10 @@ export function FuentesLista({ tipo }: { tipo: 'landing' | 'offline' }) {
                     <td className="ax-table__td">{new Date(f.actualizado_en).toLocaleString('es-PE')}</td>
                     <td className="ax-table__td" style={{ textAlign: 'end' }}>
                       <div className="ax-cluster" style={{ gap: 4, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                        {tipo === 'landing' && puedeEditar && (
-                          <Link className="ax-btn ax-btn--ghost ax-btn--sm" href={`/landings/${f.slug}/editar`}>Editar página</Link>
-                        )}
                         <Link className="ax-btn ax-btn--ghost ax-btn--sm" href={`/${t.base}/${f.slug}`}>Gestionar</Link>
+                        {tipo === 'landing' && (
+                          <Link className="ax-btn ax-btn--ghost ax-btn--sm" href={`/landings/${f.slug}/configuracion`}>Configuración</Link>
+                        )}
                         <Link className="ax-btn ax-btn--ghost ax-btn--sm" href={`/${t.base}/${f.slug}/registros`}>Registros</Link>
                         {esAdmin && (
                           <button type="button" className="ax-btn ax-btn--ghost ax-btn--sm" onClick={() => setModal({ modo: 'duplicar', fuente: f })}>Duplicar</button>

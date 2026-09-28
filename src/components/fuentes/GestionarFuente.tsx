@@ -4,8 +4,9 @@
  * (CamposEditor), clave de envío (solo admin: fuentes_adm en RLS exige
  * es_admin para escribir en `fuentes`) y un resumen de registros vía
  * dashboard_resumen (RPC ya existente, evita duplicar el conteo por-fuente).
- * En las landings, formulario y correo de agradecimiento se editan en el
- * asistente del CMS (src/components/landings/wizard); aquí solo se enlaza.
+ * En las landings esta es la página "Configuración" (/landings/<slug>/configuracion):
+ * lo visual, el formulario y el correo se editan en "Gestionar" (el asistente del
+ * CMS, src/components/landings/wizard); aquí solo se enlaza.
  */
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -130,7 +131,10 @@ export function GestionarFuente({ slug, tipo }: { slug: string; tipo: 'landing' 
 
   return (
     <>
-      <PageHead title={`Gestionar · ${f.nombre}`} />
+      <PageHead
+        title={`${tipo === 'landing' ? 'Configuración' : 'Gestionar'} · ${f.nombre}`}
+        subtitle={tipo === 'landing' ? 'Datos de la fuente, estado y conexión para enviar leads desde páginas externas.' : undefined}
+      />
       <div className="ax-dash-grid">
         <section className="ax-card ax-col--12">
           <div className="ax-card__header"><div className="ax-card__titles"><h2 className="ax-card__title">Datos</h2></div></div>
@@ -193,7 +197,15 @@ export function GestionarFuente({ slug, tipo }: { slug: string; tipo: 'landing' 
 
         {esAdmin && (
           <section className="ax-card ax-col--12">
-            <div className="ax-card__header"><div className="ax-card__titles"><h2 className="ax-card__title">Clave de envío</h2></div></div>
+            <div className="ax-card__header">
+              <div className="ax-card__titles">
+                <h2 className="ax-card__title">Conexión</h2>
+                <p className="ax-card__subtitle">
+                  Clave para que una página externa (hecha en código, como la de EXPOMINA) envíe leads a esta fuente.
+                  {tipo === 'landing' && ' Las páginas creadas en Gestionar no la necesitan.'}
+                </p>
+              </div>
+            </div>
             <div className="ax-card__body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--ax-space-3)' }}>
               <p>
                 <span className={`ax-badge ax-badge--soft ax-badge--pill ax-badge--sm ${f.clave_hash ? 'ax-badge--success' : 'ax-badge--neutral'}`}>
@@ -255,7 +267,7 @@ function PaginaLanding({ fuente }: { fuente: Fuente }) {
   const estado = pagina === undefined ? null : pagina?.publicada ? 'Publicada' : pagina ? 'Borrador' : 'Sin página propia';
   return (
     <section className="ax-card ax-col--12">
-      <div className="ax-card__header"><div className="ax-card__titles"><h2 className="ax-card__title">Página, formulario y agradecimiento</h2></div></div>
+      <div className="ax-card__header"><div className="ax-card__titles"><h2 className="ax-card__title">Página</h2></div></div>
       <div className="ax-card__body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--ax-space-3)' }}>
         {estado && (
           <p>
@@ -268,7 +280,7 @@ function PaginaLanding({ fuente }: { fuente: Fuente }) {
           {fuente.campos?.length ?? 0} campos en el formulario · correo de agradecimiento {fuente.correo_gracias?.activo ? 'activo' : 'inactivo'}.
         </p>
         <div className="ax-cluster" style={{ gap: 'var(--ax-space-2)', flexWrap: 'wrap' }}>
-          {puedeEditar && <Link className="ax-btn ax-btn--primary" href={`/landings/${fuente.slug}/editar`}>Abrir editor</Link>}
+          {puedeEditar && <Link className="ax-btn ax-btn--primary" href={`/landings/${fuente.slug}`}>Editar diseño y formulario</Link>}
           {pagina?.publicada && <a className="ax-btn ax-btn--secondary" href={`/l/${fuente.slug}`} target="_blank" rel="noopener noreferrer">Ver página</a>}
         </div>
       </div>
