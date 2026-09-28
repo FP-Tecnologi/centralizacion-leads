@@ -1,5 +1,5 @@
 // Arma el paquete para cPanel "Setup Node.js App" a partir de `next build` (output: 'standalone').
-// Uso: npm run empaquetar   → dist/leads-cpanel/ y dist/leads-cpanel.zip
+// Uso: npm run empaquetar   → compila (standalone) y deja dist/leads-cpanel/ y dist/leads-cpanel.zip
 //
 // - copia public/ y .next/static dentro del standalone (server.js los sirve desde ahí);
 // - borra cualquier .env* que Next haya copiado: las variables NEXT_PUBLIC_* ya quedaron
@@ -13,8 +13,12 @@ const standalone = path.join(raiz, '.next', 'standalone');
 const destino = path.join(raiz, 'dist', 'leads-cpanel');
 const zip = path.join(raiz, 'dist', 'leads-cpanel.zip');
 
+// build con output 'standalone' (next.config.ts solo lo activa con BUILD_STANDALONE)
+rmSync(path.join(raiz, '.next'), { recursive: true, force: true });
+execFileSync('npx next build --webpack', { stdio: 'inherit', shell: true, env: { ...process.env, BUILD_STANDALONE: '1' } });
+
 if (!existsSync(path.join(standalone, 'server.js'))) {
-  console.error('No existe .next/standalone/server.js. Corre primero `npm run build`.');
+  console.error('El build no generó .next/standalone/server.js.');
   process.exit(1);
 }
 

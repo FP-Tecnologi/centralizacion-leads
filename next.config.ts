@@ -12,10 +12,10 @@ import type { NextConfig } from 'next';
  * default, mirroring the reference, so this is permissive, not required).
  */
 const nextConfig: NextConfig = {
-  // Despliegue en cPanel "Setup Node.js App": `.next/standalone` trae su propio server.js y
-  // solo los node_modules que usa; scripts/empaquetar-cpanel.mjs le suma public/ y
-  // .next/static y lo deja listo para subir (ver DEPLOY-CPANEL.md).
-  output: 'standalone',
+  // Solo para el paquete .zip (npm run empaquetar pone BUILD_STANDALONE=1): `.next/standalone`
+  // trae su propio server.js y una copia de los node_modules que usa. En el despliegue desde
+  // Git (cPanel AI App Hosting, `npm start`) no hace falta y duplicaría el espacio en disco.
+  output: process.env.BUILD_STANDALONE ? 'standalone' : undefined,
   // la raíz es esta app, no el monorepo ni un package-lock suelto en la carpeta del usuario:
   // si no, standalone anida server.js bajo la ruta completa del disco.
   outputFileTracingRoot: path.resolve(__dirname),
