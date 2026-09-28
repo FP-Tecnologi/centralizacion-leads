@@ -2,9 +2,10 @@
 /*
  * Sistema de Leads — gestión de una fuente (landing/offline): datos, formulario
  * (CamposEditor), clave de envío (solo admin: fuentes_adm en RLS exige
- * es_admin para escribir en `fuentes`), correo de agradecimiento (solo tipo
- * landing) y un resumen de registros vía dashboard_resumen (RPC ya existente,
- * evita duplicar el conteo por-fuente).
+ * es_admin para escribir en `fuentes`) y un resumen de registros vía
+ * dashboard_resumen (RPC ya existente, evita duplicar el conteo por-fuente).
+ * En las landings, formulario y correo de agradecimiento se editan en el
+ * asistente del CMS (src/components/landings/wizard); aquí solo se enlaza.
  */
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -15,6 +16,7 @@ import { refrescarFuentes } from '../../hooks/useFuentesMenu';
 import { hayClavesInvalidas } from '../../lib/leads/camposUtil';
 import type { CampoFormulario } from '../../../supabase/functions/_shared/lead';
 import { CamposEditor } from './CamposEditor';
+import { paginaDeFuente, type PaginaGuardada } from '../../lib/landings/datos';
 import { PageHead } from '../shell/PageHead';
 
 export function GestionarFuente({ slug, tipo }: { slug: string; tipo: 'landing' | 'offline' }) {
@@ -26,13 +28,9 @@ export function GestionarFuente({ slug, tipo }: { slug: string; tipo: 'landing' 
   const [dominio, setDominio] = useState('');
   const [estado, setEstado] = useState<'activa' | 'cerrada'>('activa');
   const [campos, setCampos] = useState<CampoFormulario[]>([]);
-  const [correoActivo, setCorreoActivo] = useState(false);
-  const [correoAsunto, setCorreoAsunto] = useState('');
-  const [correoPlantilla, setCorreoPlantilla] = useState('');
 
   const [guardandoDatos, setGuardandoDatos] = useState(false);
   const [guardandoCampos, setGuardandoCampos] = useState(false);
-  const [guardandoCorreo, setGuardandoCorreo] = useState(false);
   const [errorGuardado, setErrorGuardado] = useState<string | null>(null);
 
   const [clave, setClave] = useState<string | null>(null);
@@ -50,9 +48,6 @@ export function GestionarFuente({ slug, tipo }: { slug: string; tipo: 'landing' 
           setDominio(fuente.dominio ?? '');
           setEstado(fuente.estado);
           setCampos(fuente.campos ?? []);
-          setCorreoActivo(fuente.correo_gracias?.activo ?? false);
-          setCorreoAsunto(fuente.correo_gracias?.asunto ?? '');
-          setCorreoPlantilla(fuente.correo_gracias?.plantilla ?? '');
         }
       })
       .catch(() => setF(null));
@@ -112,22 +107,6 @@ export function GestionarFuente({ slug, tipo }: { slug: string; tipo: 'landing' 
     }
   };
 
-  const guardarCorreo = async () => {
-    setErrorGuardado(null);
-    setGuardandoCorreo(true);
-    try {
-      const actualizado = await guardarFuente({
-        id: f.id,
-        correo_gracias: { activo: correoActivo, asunto: correoAsunto, plantilla: correoPlantilla },
-      });
-      setF(actualizado);
-    } catch {
-      setErrorGuardado('No se pudo guardar. Intenta de nuevo.');
-    } finally {
-      setGuardandoCorreo(false);
-    }
-  };
-
   const regenerarClave = async () => {
     if (!window.confirm('Las landings que usen la clave anterior dejarán de enviar datos. ¿Continuar?')) return;
     setErrorClave(null);
@@ -183,6 +162,9 @@ export function GestionarFuente({ slug, tipo }: { slug: string; tipo: 'landing' 
           )}
         </section>
 
+        {tipo === 'landing' ? (
+          <PaginaLanding fuente={f} />
+        ) : (
         <section className="ax-card ax-col--12">
           <div className="ax-card__header"><div className="ax-card__titles"><h2 className="ax-card__title">Formulario</h2></div></div>
           <div className="ax-card__body">
@@ -207,6 +189,7 @@ export function GestionarFuente({ slug, tipo }: { slug: string; tipo: 'landing' 
             </div>
           )}
         </section>
+        )}
 
         {esAdmin && (
           <section className="ax-card ax-col--12">
@@ -240,31 +223,6 @@ export function GestionarFuente({ slug, tipo }: { slug: string; tipo: 'landing' 
           </section>
         )}
 
-        {tipo === 'landing' && (
-          <section className="ax-card ax-col--12">
-            <div className="ax-card__header"><div className="ax-card__titles"><h2 className="ax-card__title">Correo de agradecimiento</h2></div></div>
-            <div className="ax-card__body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--ax-space-3)' }}>
-              <label className="ax-cluster" style={{ gap: 8 }}>
-                <input type="checkbox" className="ax-switch" checked={correoActivo} onChange={(e) => setCorreoActivo(e.target.checked)} disabled={!esAdmin} />
-                Activo
-              </label>
-              <div className="ax-field">
-                <label className="ax-label" htmlFor="gf-asunto">Asunto</label>
-                <input id="gf-asunto" className="ax-input" value={correoAsunto} onChange={(e) => setCorreoAsunto(e.target.value)} disabled={!esAdmin} />
-              </div>
-              <div className="ax-field">
-                <label className="ax-label" htmlFor="gf-plantilla">Plantilla (HTML) — usa {'{{nombre}}'} para el nombre</label>
-                <textarea id="gf-plantilla" className="ax-input" rows={6} value={correoPlantilla} onChange={(e) => setCorreoPlantilla(e.target.value)} disabled={!esAdmin} />
-              </div>
-            </div>
-            {esAdmin && (
-              <div className="ax-card__footer" style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--ax-border)' }}>
-                <button type="button" className="ax-btn ax-btn--primary" disabled={guardandoCorreo} onClick={guardarCorreo}>Guardar</button>
-              </div>
-            )}
-          </section>
-        )}
-
         <section className="ax-card ax-col--12">
           <div className="ax-card__header"><div className="ax-card__titles"><h2 className="ax-card__title">Resumen</h2></div></div>
           <div className="ax-card__body ax-cluster" style={{ gap: 'var(--ax-space-8)', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -283,6 +241,38 @@ export function GestionarFuente({ slug, tipo }: { slug: string; tipo: 'landing' 
 
       {errorGuardado && <p role="alert" className="ax-note" style={{ color: 'var(--ax-danger-500)' }}>{errorGuardado}</p>}
     </>
+  );
+}
+
+/** Landings: el formulario y el correo se editan en el asistente del CMS. */
+function PaginaLanding({ fuente }: { fuente: Fuente }) {
+  const { puedeEditar } = useAuth();
+  const [pagina, setPagina] = useState<PaginaGuardada | null | undefined>(undefined);
+  useEffect(() => {
+    paginaDeFuente(fuente.id).then(setPagina).catch(() => setPagina(null));
+  }, [fuente.id]);
+
+  const estado = pagina === undefined ? null : pagina?.publicada ? 'Publicada' : pagina ? 'Borrador' : 'Sin página propia';
+  return (
+    <section className="ax-card ax-col--12">
+      <div className="ax-card__header"><div className="ax-card__titles"><h2 className="ax-card__title">Página, formulario y agradecimiento</h2></div></div>
+      <div className="ax-card__body" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--ax-space-3)' }}>
+        {estado && (
+          <p>
+            <span className={`ax-badge ax-badge--soft ax-badge--pill ax-badge--sm ${pagina?.publicada ? 'ax-badge--success' : 'ax-badge--neutral'}`}>
+              <span className="ax-badge__dot" /><span>{estado}</span>
+            </span>
+          </p>
+        )}
+        <p className="ax-text-subtle" style={{ margin: 0 }}>
+          {fuente.campos?.length ?? 0} campos en el formulario · correo de agradecimiento {fuente.correo_gracias?.activo ? 'activo' : 'inactivo'}.
+        </p>
+        <div className="ax-cluster" style={{ gap: 'var(--ax-space-2)', flexWrap: 'wrap' }}>
+          {puedeEditar && <Link className="ax-btn ax-btn--primary" href={`/landings/${fuente.slug}/editar`}>Abrir editor</Link>}
+          {pagina?.publicada && <a className="ax-btn ax-btn--secondary" href={`/l/${fuente.slug}`} target="_blank" rel="noopener noreferrer">Ver página</a>}
+        </div>
+      </div>
+    </section>
   );
 }
 

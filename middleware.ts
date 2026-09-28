@@ -9,7 +9,8 @@ import { NextResponse, type NextRequest } from 'next/server';
  * is still authorized by the real Bearer token, not this cookie.
  */
 const SESSION_COOKIE = 'ax_session';
-const PUBLIC_PREFIXES = ['/auth', '/pages', '/error'];
+// '/l' = landings públicas del CMS (app/l/[slug]), sin login.
+const PUBLIC_PREFIXES = ['/auth', '/pages', '/error', '/l'];
 
 function isPublicPath(pathname: string): boolean {
   return PUBLIC_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));

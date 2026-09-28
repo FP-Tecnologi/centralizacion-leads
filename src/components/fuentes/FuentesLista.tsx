@@ -24,7 +24,7 @@ const TEXTOS = {
 type ModalState = { modo: 'nueva' } | { modo: 'duplicar'; fuente: Fuente } | null;
 
 export function FuentesLista({ tipo }: { tipo: 'landing' | 'offline' }) {
-  const { esAdmin } = useAuth();
+  const { esAdmin, puedeEditar } = useAuth();
   const router = useRouter();
   const t = TEXTOS[tipo];
   const [fuentes, setFuentes] = useState<Fuente[]>([]);
@@ -58,7 +58,10 @@ export function FuentesLista({ tipo }: { tipo: 'landing' | 'offline' }) {
       <PageHead
         title={t.titulo}
         actions={esAdmin ? (
-          <button type="button" className="ax-btn ax-btn--primary" onClick={() => setModal({ modo: 'nueva' })}>{t.nuevo}</button>
+          // Las landings se crean con el asistente del CMS (plantilla, contenido, formulario).
+          tipo === 'landing'
+            ? <Link className="ax-btn ax-btn--primary" href="/landings/nueva">{t.nuevo}</Link>
+            : <button type="button" className="ax-btn ax-btn--primary" onClick={() => setModal({ modo: 'nueva' })}>{t.nuevo}</button>
         ) : undefined}
       />
 
@@ -98,6 +101,9 @@ export function FuentesLista({ tipo }: { tipo: 'landing' | 'offline' }) {
                     <td className="ax-table__td">{new Date(f.actualizado_en).toLocaleString('es-PE')}</td>
                     <td className="ax-table__td" style={{ textAlign: 'end' }}>
                       <div className="ax-cluster" style={{ gap: 4, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                        {tipo === 'landing' && puedeEditar && (
+                          <Link className="ax-btn ax-btn--ghost ax-btn--sm" href={`/landings/${f.slug}/editar`}>Editar página</Link>
+                        )}
                         <Link className="ax-btn ax-btn--ghost ax-btn--sm" href={`/${t.base}/${f.slug}`}>Gestionar</Link>
                         <Link className="ax-btn ax-btn--ghost ax-btn--sm" href={`/${t.base}/${f.slug}/registros`}>Registros</Link>
                         {esAdmin && (
@@ -206,7 +212,7 @@ function FuenteModal({
           </div>
           <div className="ax-card__body" style={{ paddingTop: 0, display: 'flex', flexDirection: 'column', gap: 'var(--ax-space-3)' }}>
             {origen && (
-              <p className="ax-note">Se copian campos del formulario, dominio y correo de agradecimiento. Los registros no se copian. El diseño visual se clona del repositorio de la landing.</p>
+              <p className="ax-note">Se copian campos del formulario, dominio, correo de agradecimiento y la página del CMS (queda sin publicar). Los registros no se copian.</p>
             )}
             <div className="ax-field">
               <label className="ax-label" htmlFor="fm-nombre">Nombre</label>
