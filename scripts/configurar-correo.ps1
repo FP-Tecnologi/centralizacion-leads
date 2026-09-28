@@ -1,20 +1,24 @@
 # Carga en Supabase (proyecto de leads) los secretos de correo de las Edge Functions,
-# reutilizando la clave de Resend del ERP (apps/api/.env). La clave no se muestra.
-# Uso (desde apps/leads, después de `npx supabase login`):
+# reutilizando la clave de Resend del ERP (apps/api/.env del monorepo FPTecnologi-HUB).
+# La clave no se muestra.
+# Uso (desde la raíz de este repo, después de `npx supabase login`):
 #   powershell -ExecutionPolicy Bypass -File scripts/configurar-correo.ps1
+#   (si el HUB está en otra carpeta: -EnvApi C:\ruta\FPTecnologi-HUB\apps\api\.env)
 param(
   [string]$ProjectRef = 'qpjxwtvmuqramhqoxkxj',
-  [string]$SiteUrl = 'http://localhost:3003'
+  [string]$SiteUrl = 'http://localhost:3003',
+  # por defecto: FPTecnologi-HUB clonado al lado de este repo
+  [string]$EnvApi = (Join-Path $PSScriptRoot '..\..\FPTecnologi-HUB\apps\api\.env')
 )
 
-$envApi = Join-Path $PSScriptRoot '..\..\api\.env'
-if (-not (Test-Path $envApi)) { throw "No encuentro $envApi" }
+$envApi = $EnvApi
+if (-not (Test-Path $envApi)) { throw "No encuentro $envApi (usa -EnvApi con la ruta al .env del ERP)" }
 
 $vars = @{}
 Get-Content $envApi | ForEach-Object {
   if ($_ -match '^\s*([A-Z_]+)\s*=\s*"?(.*?)"?\s*$') { $vars[$matches[1]] = $matches[2] }
 }
-if (-not $vars.RESEND_API_KEY) { throw 'apps/api/.env no tiene RESEND_API_KEY' }
+if (-not $vars.RESEND_API_KEY) { throw "$envApi no tiene RESEND_API_KEY" }
 $from = if ($vars.RESEND_FROM_EMAIL) { $vars.RESEND_FROM_EMAIL } else { 'no-reply@fptecnologi.com' }
 
 npx supabase secrets set --project-ref $ProjectRef `

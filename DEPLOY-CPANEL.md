@@ -5,14 +5,24 @@ Hay dos formas. **A (recomendada): desde Git** con "Implementar una aplicación 
 
 ## A. Desde el repositorio Git (Sitios web y aplicaciones → Implementar Node.js)
 
-El repo es un monorepo y es privado. cPanel necesita el `package.json` en la raíz, así que
-se publica una rama aparte, **`deploy/leads`**, que contiene solo `apps/leads` en la raíz.
+Repo privado `FP-Tecnologi/centralizaci-n-leads`, con el `package.json` en la raíz.
 
 1. **Origen → Repositorio Git**, URL (SSH, porque el repo es privado):
-   `git@github.com:FP-Tecnologi/FPTecnologi-HUB.git` — rama **`deploy/leads`**.
-2. cPanel muestra una **clave SSH pública** (deploy key). En GitHub → repo
-   `FP-Tecnologi/FPTecnologi-HUB` → Settings → Deploy keys → Add deploy key → pegarla,
-   **solo lectura** (sin "Allow write access").
+   `git@github.com:FP-Tecnologi/centralizaci-n-leads.git` — rama **`main`**.
+2. Clave SSH del servidor: cPanel → Seguridad → Acceso SSH → Administrar claves SSH →
+   generar (sin contraseña). La **pública** (`.pub`, empieza con `ssh-rsa`) va en GitHub →
+   este repo → Settings → Deploy keys → Add deploy key, **solo lectura**. La privada nunca
+   sale del servidor.
+   - La organización FP-Tecnologi debe tener las deploy keys habilitadas
+     (Organización → Settings → Deploy keys → Enabled); si no, la sección no deja agregarlas.
+   - Si la clave no se llama `id_rsa`, crear `~/.ssh/config` en el servidor (permisos 600):
+     ```
+     Host github.com
+       HostName github.com
+       User git
+       IdentityFile ~/.ssh/NOMBRE_DE_LA_CLAVE
+       IdentitiesOnly yes
+     ```
 3. **Implementación**: Node.js 22, comando de build `npm run build`, inicio `npm start`
    (usa el puerto que asigna cPanel). Variables de entorno (se necesitan en el build):
    - `NEXT_PUBLIC_SUPABASE_URL = https://qpjxwtvmuqramhqoxkxj.supabase.co`
@@ -21,14 +31,7 @@ se publica una rama aparte, **`deploy/leads`**, que contiene solo `apps/leads` e
 4. Dominio: `leads.fptecnologi.com` (o el que elijas) con HTTPS. Luego la sección 6
    (URLs de Supabase Auth).
 
-**Actualizar la rama de despliegue** después de cambios en `develop`/`main` (desde la raíz
-del monorepo):
-
-```bash
-git push origin "$(git subtree split --prefix=apps/leads HEAD)":refs/heads/deploy/leads
-```
-
-y en cPanel → la app → **Volver a implementar** (Redeploy).
+**Actualizar:** `git push` a `main` y en cPanel → la app → **Volver a implementar**.
 
 ## B. Subiendo un .zip
 
@@ -38,15 +41,15 @@ los `node_modules` que necesita, así que **no hay que correr `npm install` en e
 
 ## 1. Generar el paquete (en tu PC)
 
-`apps/leads/.env.local` debe tener las claves de **producción** (`qpjxwtvmuqramhqoxkxj`):
+`.env.local` debe tener las claves de **producción** (`qpjxwtvmuqramhqoxkxj`):
 las `NEXT_PUBLIC_*` se incrustan en el build. La `service_role` no se usa ni se sube.
 
 ```bash
-cd apps/leads
+
 npm run empaquetar
 ```
 
-Resultado: `apps/leads/dist/leads-cpanel.zip` (~10 MB).
+Resultado: `dist/leads-cpanel.zip` (~10 MB).
 
 ## 2. Crear el subdominio
 

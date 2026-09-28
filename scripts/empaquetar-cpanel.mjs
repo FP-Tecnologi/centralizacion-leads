@@ -33,7 +33,7 @@ writeFileSync(
     'Sistema de Centralización de Leads — paquete para cPanel (Setup Node.js App).',
     'Archivo de inicio (Application startup file): server.js',
     'No hace falta "Run NPM Install": node_modules ya viene incluido.',
-    'Guía completa: apps/leads/DEPLOY-CPANEL.md en el repositorio.',
+    'Guía completa: DEPLOY-CPANEL.md en el repositorio.',
     '',
   ].join('\n'),
 );
