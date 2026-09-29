@@ -20,6 +20,19 @@ const nextConfig: NextConfig = {
   // si no, standalone anida server.js bajo la ruta completa del disco.
   outputFileTracingRoot: path.resolve(__dirname),
   turbopack: { root: path.resolve(__dirname) },
+  // El hosting (cPanel AI App Hosting) mata el build si pasa su tope de RAM ("Killed"):
+  // un solo worker, sin hilos extra y con las optimizaciones de memoria de webpack.
+  experimental: {
+    cpus: 1,
+    workerThreads: false,
+    webpackMemoryOptimizations: true,
+    webpackBuildWorker: false,
+  },
+  webpack: (config, { dev }) => {
+    // sin caché en disco/memoria en el build de producción: menos RAM pico
+    if (!dev) config.cache = false;
+    return config;
+  },
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: 'i.pravatar.cc' },
