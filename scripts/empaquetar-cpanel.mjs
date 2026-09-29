@@ -31,6 +31,13 @@ for (const f of readdirSync(destino)) {
   if (f.startsWith('.env')) rmSync(path.join(destino, f), { force: true });
 }
 
+// El paquete no trae el binario `next` (standalone no lo necesita): si en cPanel alguien
+// pulsa "Run JS script → start", `next start` fallaría con "next: command not found".
+writeFileSync(
+  path.join(destino, 'package.json'),
+  `${JSON.stringify({ name: 'fptecnologi-leads', private: true, scripts: { start: 'node server.js' } }, null, 2)}\n`,
+);
+
 writeFileSync(
   path.join(destino, 'LEEME.txt'),
   [
