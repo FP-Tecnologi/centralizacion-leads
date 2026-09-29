@@ -52,7 +52,7 @@ conocido al cargar `vitest.config.ts`). El lint está roto con TypeScript 7 (pen
 
 ## Despliegue
 
-cPanel → Setup Node.js App, desde este repo (rama `main`) o subiendo un .zip.
+Producción: **https://leads.fptecnologi.com** — cPanel *AI App Hosting*, app `leads`, desde este repo (rama `main`), sin variables de entorno (van en `.env.production`).
 Ver [`DEPLOY-CPANEL.md`](DEPLOY-CPANEL.md).
 
 ## Vinculación con FPTecnologi-HUB

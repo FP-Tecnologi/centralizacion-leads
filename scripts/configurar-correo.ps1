@@ -6,7 +6,7 @@
 #   (si el HUB está en otra carpeta: -EnvApi C:\ruta\FPTecnologi-HUB\apps\api\.env)
 param(
   [string]$ProjectRef = 'qpjxwtvmuqramhqoxkxj',
-  [string]$SiteUrl = 'http://localhost:3003',
+  [string]$SiteUrl = 'https://leads.fptecnologi.com',
   # por defecto: FPTecnologi-HUB clonado al lado de este repo
   [string]$EnvApi = (Join-Path $PSScriptRoot '..\..\FPTecnologi-HUB\apps\api\.env')
 )
@@ -28,5 +28,5 @@ npx supabase secrets set --project-ref $ProjectRef `
 
 if ($LASTEXITCODE -eq 0) {
   Write-Host "`nListo: RESEND_API_KEY, EMAIL_FROM ($from) y LEADS_SITE_URL ($SiteUrl) cargados en $ProjectRef."
-  Write-Host 'Cuando la app esté en cPanel, vuelve a correrlo con -SiteUrl https://leads.fptecnologi.com'
+  Write-Host 'Para probar invitaciones en tu PC: vuelve a correrlo con -SiteUrl http://localhost:3003'
 }

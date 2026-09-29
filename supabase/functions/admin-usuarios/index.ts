@@ -10,7 +10,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { CORS, json } from '../_shared/http.ts';
 
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
-const SITE = Deno.env.get('LEADS_SITE_URL') ?? 'http://localhost:3003';
+const SITE = Deno.env.get('LEADS_SITE_URL') ?? 'https://leads.fptecnologi.com';
 const ROLES = ['superadmin', 'admin', 'editor', 'lector'] as const;
 type Rol = (typeof ROLES)[number];
 const ROLES_ALTOS: (Rol | null)[] = ['superadmin', 'admin'];
