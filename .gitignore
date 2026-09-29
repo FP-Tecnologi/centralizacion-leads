@@ -10,3 +10,10 @@ next-env.d.ts
 .env.local
 supabase/.temp
 supabase/.branches
+
+# Variables propias (cPanel las escribe en .env): nunca al repo.
+# .env.production SÍ se versiona (solo valores públicos de Supabase).
+.env
+.env.development
+.env.test
+.env*.local
